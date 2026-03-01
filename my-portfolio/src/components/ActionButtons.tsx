@@ -63,7 +63,7 @@ const ActionButtons: React.FC<ActionButtonsProps> = ({ prompts, onSelect }) => {
                     <button
                         key={index}
                         onClick={() => onSelect(prompt)}
-                        className="whitespace-nowrap px-4 py-1.5 bg-gray-900/60 hover:bg-gray-800/80 border border-gray-800/60 hover:border-gray-700/80 rounded-full text-xs text-gray-400 hover:text-white transition-all hover:scale-105 active:scale-95 snap-start shrink-0 backdrop-blur-sm" // Made prompts slightly more transparent to blend
+                        className="whitespace-nowrap px-3 py-1 sm:px-4 sm:py-1.5 bg-gray-900/60 hover:bg-gray-800/80 border border-gray-800/60 hover:border-gray-700/80 rounded-full text-[10px] sm:text-xs text-gray-400 hover:text-white transition-all hover:scale-105 active:scale-95 snap-start shrink-0 backdrop-blur-sm" // Made prompts slightly more transparent to blend
                     >
                         {prompt}
                     </button>
