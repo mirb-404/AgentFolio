@@ -342,7 +342,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, acti
                 else if (localResponse.includes("{{CERTIFICATIONS}}")) toolStr = "verify_certifications";
                 else if (localResponse.includes("{{BIO}}")) toolStr = "load_user_profile";
                 else if (localResponse.includes("{{HOBBIES}}")) toolStr = "get_interests";
-                else if (localResponse.includes("{{CONTACT_FORM}}") || localResponse.includes("[Email]")) toolStr = "initiate_contact_protocol";
+                else if (localResponse.includes("{{CONTACT_FORM}}")) toolStr = "initiate_contact_protocol";
                 else if (localResponse.includes("{{RESUME}}")) toolStr = "generate_resume_link";
                 else toolStr = "search_knowledge_base";
 

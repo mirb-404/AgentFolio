@@ -1,6 +1,6 @@
 import React from 'react';
 import { portfolioData } from '../data/portfolioData';
-import { Github, Linkedin, Twitter, Mail, ExternalLink, Bot } from 'lucide-react';
+import { Github, Linkedin, Twitter, ExternalLink, Bot } from 'lucide-react';
 
 interface LayoutProps {
     children: React.ReactNode;
@@ -27,8 +27,7 @@ const Layout: React.FC<LayoutProps> = ({ children, onHomeClick }) => {
                     {portfolioData.socials.map((social) => {
                         const Icon = social.name.includes('GitHub') ? Github :
                             social.name.includes('LinkedIn') ? Linkedin :
-                                social.name.includes('Twitter') ? Twitter :
-                                    social.name.includes('Email') ? Mail : ExternalLink;
+                                social.name.includes('Twitter') ? Twitter : ExternalLink;
                         return (
                             <a
                                 key={social.name}

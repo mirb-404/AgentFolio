@@ -202,11 +202,6 @@ I'm also an avid Agentic Ai Researcher who is actively building industry grade a
     // --- Social Media ---
     socials: [
         {
-            name: "Email",
-            url: "mailto:bhandarimirang03@gmail.com",
-            handle: "bhandarimirang03@gmail.com"
-        },
-        {
             name: "GitHub",
             url: "https://github.com/Bloodwingv2",
             handle: "@Bloodwingv2"
