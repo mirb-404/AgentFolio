@@ -15,6 +15,12 @@ const SplashScreen: React.FC<SplashScreenProps> = ({ onComplete }) => {
     const fullText = "AgentFolio";
 
     useEffect(() => {
+        // Bypass splash screen entirely on mobile to save 4s of LCP penalty
+        if (window.innerWidth < 768) {
+            onComplete();
+            return;
+        }
+
         const tl = gsap.timeline();
 
         // Initial state
