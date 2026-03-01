@@ -689,14 +689,14 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, acti
                                 <div className="flex flex-col gap-2 max-w-full overflow-hidden">
                                     <div className="px-4 py-3 rounded-2xl rounded-tl-sm bg-gray-900 border border-gray-800 text-gray-400 text-sm flex items-center gap-2 w-fit max-w-full">
                                         <ThinkingVisualizer />
-                                        <span className="text-xs text-gray-500 font-mono self-center ml-2 truncate">Process(pid=404)</span>
+                                        <span className="text-xs text-gray-500 font-mono self-center ml-2 shrink-0 whitespace-nowrap">Process(pid=404)</span>
                                     </div>
 
                                     {/* Sub-status for Tool Execution (ChatGPT Style) */}
                                     {isFetchingTool && (
-                                        <div className="flex items-center gap-2 px-2 text-gray-500 text-xs animate-pulse max-w-full overflow-hidden">
+                                        <div className="flex flex-wrap items-center gap-2 px-2 text-gray-500 text-xs animate-pulse max-w-full">
                                             <Activity size={12} className="text-gray-400 shrink-0" />
-                                            <span className="truncate">Calling function: <span className="font-mono bg-gray-800/50 px-1 rounded">{fakeToolName || "fetch_github_activity"}</span>...</span>
+                                            <span className="break-all sm:break-normal">Calling function: <span className="font-mono bg-gray-800/50 px-1 rounded">{fakeToolName || "fetch_github_activity"}</span>...</span>
                                         </div>
                                     )}
                                 </div>
