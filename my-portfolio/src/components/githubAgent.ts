@@ -119,6 +119,21 @@ export const fetchGithubActivity = async (username: string = 'Bloodwingv2'): Pro
                 throw new Error(`Cached API returned status: ${response.status}`);
             }
 
+            // Extract the Vercel CDN Cache Header to verify if it hit the cache
+            const cacheStatus = response.headers.get('x-vercel-cache');
+
+            if (cacheStatus === 'HIT') {
+                console.log(`✅ SUCCESS: Response successfully cached! (Vercel Edge: ${cacheStatus})`);
+                console.log("Using cached GitHub data for the next 6 hours.");
+            } else if (cacheStatus === 'MISS') {
+                console.log(`⚠️ CACHE MISS: Vercel hit the real GitHub API. (Vercel Edge: ${cacheStatus})`);
+                console.log("Response successfully fetched and is now cached for 6 hours.");
+            } else if (cacheStatus) {
+                console.log(`ℹ️ Vercel Edge Cache Status: ${cacheStatus}`);
+            } else {
+                console.log("ℹ️ No Vercel caching headers found (Might be running locally without Vercel CLI).");
+            }
+
             const data = await response.json();
             payload = JSON.stringify(data);
         }
