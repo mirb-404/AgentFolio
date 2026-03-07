@@ -64,7 +64,7 @@ export default async function handler(req, res) {
         };
 
         // Set caching headers for Vercel Edge Network
-        res.setHeader('Cache-Control', `s-maxage=${CACHE_DURATION}, stale-while-revalidate`);
+        res.setHeader('Cache-Control', `public, s-maxage=${CACHE_DURATION}, stale-while-revalidate=86400`);
         res.status(200).json(payload);
     } catch (error) {
         console.error("Serverless Function Error:", error);
