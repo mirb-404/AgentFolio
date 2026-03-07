@@ -5,7 +5,7 @@ import mlopsImg from '../assets/Mlflow.avif';
 import keysightLogo from '../assets/kt.jpg';
 import resoluteLogo from '../assets/rai.jpg';
 import githubLogo from '../assets/gh.jpg';
-import meImg from '../assets/me.jpg';
+import meImg from '../assets/me.webp';
 import wassertumimg from '../assets/wassertum.jpg'
 import travelimg from '../assets/travel.avif'
 import overwatchimg from '../assets/overwatch.png'

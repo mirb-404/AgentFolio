@@ -1,5 +1,4 @@
-
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, startTransition } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface ActionButtonsProps {
@@ -63,7 +62,13 @@ const ActionButtons: React.FC<ActionButtonsProps> = ({ prompts, onSelect, isDisa
                 {prompts.map((prompt, index) => (
                     <button
                         key={index}
-                        onClick={() => !isDisabled && onSelect(prompt)}
+                        onClick={() => {
+                            if (!isDisabled) {
+                                startTransition(() => {
+                                    onSelect(prompt);
+                                });
+                            }
+                        }}
                         disabled={isDisabled}
                         className={`whitespace-nowrap px-3 py-1 sm:px-4 sm:py-1.5 bg-gray-900/60 border border-gray-800/60 rounded-full text-[10px] sm:text-xs text-gray-400 snap-start shrink-0 backdrop-blur-sm transition-all
                             ${isDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-800/80 hover:border-gray-700/80 hover:text-white hover:scale-105 active:scale-95'}

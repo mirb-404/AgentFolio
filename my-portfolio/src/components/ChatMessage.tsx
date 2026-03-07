@@ -11,7 +11,7 @@ import CertificationDisplay from './CertificationDisplay';
 import InteractiveHobbies from './InteractiveHobbies';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import meImg from '../assets/me.jpg';
+import meImg from '../assets/me.webp';
 import GithubWidget from './GithubWidget';
 
 interface ChatMessageProps {
