@@ -164,7 +164,7 @@ I'm also an avid Agentic Ai Researcher who is actively building industry grade a
             title: "ATS",
             category: "Applicant Tracking System",
             description: "An end-end automated Applicant Tracking System that sources candidates across GitHub, LeetCode, and StackOverflow using Legal API's. Uses Machine Learning algorithms for selection and features a live coding portal. Showcases proficiency in ETL data pipelines, ML, Full-stack (FastAPI/Streamlit), and DevOps (GitHub Actions)",
-            link: "https://github.com/Bloodwingv2/ATS",
+            link: "https://github.com/mirb-404/ATS",
             image: atsimg,
             techStack: ["FastAPI", "Pandas", "Python", "Streamlit", "Scikit-learn", "Machine Learning", "GitHub CI/CD Actions", "Data Science"],
             isNew: true
@@ -174,7 +174,7 @@ I'm also an avid Agentic Ai Researcher who is actively building industry grade a
             title: "Gaming Data Crawler",
             category: "Gaming Data Analysis",
             description: "A Python-based data crawler for gaming information, focused on scraping data from various gaming websites. ACADEMIC USE ONLY!",
-            link: "https://github.com/Bloodwingv2/Data-Crawler",
+            link: "https://github.com/mirb-404/Data-Crawler",
             image: hadoopImg,
             techStack: ["SQL-lite", "Docker", "Hadoop", "Apache Spark", "TailScale", "Distributed-Systems", "Linux", "Pandas", "Web-Scraping", "Crawlers", "Data Science"],
             isNew: true
@@ -221,8 +221,8 @@ I'm also an avid Agentic Ai Researcher who is actively building industry grade a
     socials: [
         {
             name: "GitHub",
-            url: "https://github.com/Bloodwingv2",
-            handle: "@Bloodwingv2"
+            url: "https://github.com/mirb-404",
+            handle: "@mirb-404"
         },
         {
             name: "X (Twitter)",

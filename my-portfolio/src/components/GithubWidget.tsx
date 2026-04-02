@@ -13,7 +13,7 @@ interface GithubStats {
 const GithubWidget: React.FC = () => {
     const [stats, setStats] = useState<GithubStats | null>(null);
     const [isLoading, setIsLoading] = useState(true);
-    const username = 'Bloodwingv2';
+    const username = 'mirb-404';
 
     useEffect(() => {
         const fetchStats = async () => {

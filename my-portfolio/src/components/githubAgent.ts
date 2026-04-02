@@ -22,7 +22,7 @@ export const githubActivityToolDefinition = {
             properties: {
                 username: {
                     type: "string",
-                    description: "The GitHub username to fetch. Should always be 'Bloodwingv2'."
+                    description: "The GitHub username to fetch. Should always be 'mirb-404'."
                 }
             },
             required: ["username"]
@@ -41,7 +41,7 @@ let githubCache: CacheType = {
 };
 
 // 2. Tool Execution (the actual API call executed when the LLM requests it)
-export const fetchGithubActivity = async (username: string = 'Bloodwingv2'): Promise<string> => {
+export const fetchGithubActivity = async (username: string = 'mirb-404'): Promise<string> => {
     // We still keep a tiny local cache (e.g., 5 mins) to prevent spamming our own serverless function
     // during a single user session, but the heavy lifting and 3-hour cache is handled by Vercel Edge.
     const CACHE_TTL = 5 * 60 * 1000;
