@@ -671,9 +671,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, acti
             {/* Hero Section */}
             <div
                 ref={heroRef}
-                className="flex-1 w-full flex flex-col items-center justify-center py-6 px-4 overflow-y-auto"
+                className="flex-1 w-full flex flex-col items-center justify-center py-3 sm:py-5 lg:py-6 px-4 overflow-y-auto"
             >
-                <div className="flex flex-col items-center text-center max-w-sm w-full mx-auto gap-5">
+                <div className="flex flex-col items-center text-center max-w-sm w-full mx-auto gap-3 sm:gap-4 lg:gap-5">
 
                     {/* Profile image — gradient ring */}
                     <div className="relative">
@@ -684,7 +684,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, acti
                                     alt={portfolioData.name}
                                     width="128"
                                     height="128"
-                                    className="w-24 h-24 sm:w-28 sm:h-28 md:w-32 md:h-32 rounded-full object-cover"
+                                    className="w-20 h-20 sm:w-24 sm:h-24 lg:w-28 lg:h-28 rounded-full object-cover"
                                     fetchPriority="high"
                                     decoding="sync"
                                     loading="eager"
@@ -694,30 +694,30 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, acti
                     </div>
 
                     {/* Name + Role */}
-                    <div className="space-y-1.5">
-                        <p className="text-[#484848] text-[11px] font-mono tracking-[0.18em] uppercase">Hi, I'm</p>
-                        <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white tracking-tight leading-[1.05]">
+                    <div className="space-y-1">
+                        <p className="text-[#484848] text-[10px] sm:text-[11px] font-mono tracking-[0.18em] uppercase">Hi, I'm</p>
+                        <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-white tracking-tight leading-[1.05]">
                             {portfolioData.name}
                         </h2>
-                        <p className="text-sm sm:text-base font-medium pt-0.5 bg-gradient-to-r from-blue-400 via-blue-300 to-cyan-400 bg-clip-text text-transparent">
+                        <p className="text-sm sm:text-[15px] font-medium pt-0.5 bg-gradient-to-r from-blue-400 via-blue-300 to-cyan-400 bg-clip-text text-transparent">
                             {portfolioData.role}
                         </p>
                     </div>
 
                     {/* Tagline */}
-                    <p className="text-[#545454] text-sm sm:text-[15px] leading-relaxed max-w-xs">
+                    <p className="text-[#545454] text-xs sm:text-sm leading-relaxed max-w-xs">
                         Ask me anything about my work, projects, or experience.
                     </p>
 
                     {/* Stats strip */}
-                    <div className="flex items-center gap-5 sm:gap-7 py-3 px-6 rounded-2xl border border-[#161616] bg-[#0d0d0d]">
+                    <div className="flex items-center gap-4 sm:gap-6 lg:gap-7 py-2.5 sm:py-3 px-5 sm:px-6 rounded-2xl border border-[#161616] bg-[#0d0d0d]">
                         {portfolioData.heroStats.map((stat, i, arr) => (
                             <React.Fragment key={stat.label}>
                                 <div className="flex flex-col items-center gap-0.5">
-                                    <span className="text-white font-bold text-base sm:text-lg leading-none">{stat.value}</span>
-                                    <span className="text-[#484848] text-[10px] sm:text-[11px] font-mono">{stat.label}</span>
+                                    <span className="text-white font-bold text-sm sm:text-base lg:text-lg leading-none">{stat.value}</span>
+                                    <span className="text-[#484848] text-[9px] sm:text-[10px] lg:text-[11px] font-mono">{stat.label}</span>
                                 </div>
-                                {i < arr.length - 1 && <span className="w-px h-7 bg-[#181818]" />}
+                                {i < arr.length - 1 && <span className="w-px h-6 sm:h-7 bg-[#181818]" />}
                             </React.Fragment>
                         ))}
                     </div>
@@ -725,10 +725,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, acti
                     {/* CTA */}
                     <button
                         onClick={onStart}
-                        className="group flex items-center gap-2.5 px-8 py-3.5 bg-white text-black font-semibold text-sm rounded-xl hover:bg-gray-100 transition-all hover:scale-[1.02] active:scale-[0.98] shadow-xl shadow-white/5"
+                        className="group flex items-center gap-2 sm:gap-2.5 px-6 sm:px-8 py-3 sm:py-3.5 bg-white text-black font-semibold text-sm rounded-xl hover:bg-gray-100 transition-all hover:scale-[1.02] active:scale-[0.98] shadow-xl shadow-white/5"
                     >
                         Start Chatting
-                        <Send size={14} className="group-hover:translate-x-0.5 transition-transform duration-150" />
+                        <Send size={13} className="group-hover:translate-x-0.5 transition-transform duration-150" />
                     </button>
 
                 </div>

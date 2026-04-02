@@ -100,7 +100,7 @@ const GithubWidget: React.FC = () => {
                         <BookOpen className="w-4 h-4" />
                     </div>
                     <div>
-                        <div className="text-xl sm:text-2xl font-bold text-white leading-none font-display">
+                        <div className="text-lg sm:text-xl font-bold text-white leading-none font-display">
                             {isLoading ? "—" : stats?.public_repos ?? 0}
                         </div>
                         <div className="text-[11px] text-[#585858] font-mono mt-1">Public Repos</div>
@@ -112,7 +112,7 @@ const GithubWidget: React.FC = () => {
                         <Users className="w-4 h-4" />
                     </div>
                     <div>
-                        <div className="text-xl sm:text-2xl font-bold text-white leading-none font-display">
+                        <div className="text-lg sm:text-xl font-bold text-white leading-none font-display">
                             {isLoading ? "—" : stats?.followers ?? 0}
                         </div>
                         <div className="text-[11px] text-[#585858] font-mono mt-1">Followers</div>
