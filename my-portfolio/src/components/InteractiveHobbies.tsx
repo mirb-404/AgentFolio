@@ -85,36 +85,31 @@ const InteractiveHobbies: React.FC<InteractiveHobbiesProps> = React.memo(({ hobb
                         return (
                             <div
                                 key={idx}
-                                className={`interactive-hobby-card group relative overflow-hidden rounded-2xl bg-[#111111] border border-gray-800/50 hover:border-gray-600/50 transition-all duration-500 ease-out hover:-translate-y-1 hover:shadow-2xl flex flex-col justify-end p-6 ${isLarge ? 'md:col-span-2 md:aspect-[2.5/1]' : 'min-h-[240px] md:aspect-auto md:h-48'}`}
+                                className={`interactive-hobby-card group relative overflow-hidden rounded-2xl bg-[#111111] border border-gray-800/50 hover:border-gray-600/50 transition-[border-color,box-shadow,transform] duration-300 ease-out hover:-translate-y-1 hover:shadow-2xl flex flex-col justify-end p-6 ${isLarge ? 'md:col-span-2 md:aspect-[2.5/1]' : 'min-h-[240px] md:aspect-auto md:h-48'}`}
+                                style={{ willChange: 'transform' }}
                             >
                                 {/* Optional Background Image Layer */}
-                                {
-                                    hobby.bgImage && (
-                                        <div
-                                            className="absolute inset-0 bg-cover bg-center opacity-40 group-hover:opacity-60 transition-all duration-700 ease-out group-hover:scale-110"
-                                            style={{ backgroundImage: `url(${hobby.bgImage})` }}
-                                        />
-                                    )
-                                }
+                                {hobby.bgImage && (
+                                    <div
+                                        className="absolute inset-0 bg-cover bg-center opacity-40 group-hover:opacity-60 transition-opacity duration-500 ease-out"
+                                        style={{ backgroundImage: `url(${hobby.bgImage})` }}
+                                    />
+                                )}
                                 {/* Background Image Gradient Overlay */}
-                                {
-                                    hobby.bgImage && (
-                                        <div className="absolute inset-0 bg-gradient-to-t from-[#111111] via-[#111111]/80 to-transparent" />
-                                    )
-                                }
+                                {hobby.bgImage && (
+                                    <div className="absolute inset-0 bg-gradient-to-t from-[#111111] via-[#111111]/80 to-transparent" />
+                                )}
 
                                 {/* Animated Ambient Glow Background */}
-                                < div
-                                    className="absolute inset-0 opacity-0 group-hover:opacity-20 transition-opacity duration-700 ease-out"
-                                    style={{
-                                        background: `radial-gradient(circle at 50% 120%, ${styleColor}, transparent 70%)`
-                                    }}
+                                <div
+                                    className="absolute inset-0 opacity-0 group-hover:opacity-20 transition-opacity duration-500 ease-out"
+                                    style={{ background: `radial-gradient(circle at 50% 120%, ${styleColor}, transparent 70%)` }}
                                 />
 
                                 {/* Icon Layer */}
                                 <div className="absolute top-6 left-6 z-10">
                                     <div
-                                        className="p-3 rounded-xl bg-gray-900/80 backdrop-blur-md border border-white/10 group-hover:scale-110 transition-transform duration-500 ease-out shadow-lg"
+                                        className="p-3 rounded-xl bg-gray-900/90 border border-white/10 group-hover:scale-110 transition-transform duration-300 ease-out shadow-lg"
                                         style={{ color: styleColor }}
                                     >
                                         {getIcon(hobby.icon, { size: 24 })}
@@ -123,21 +118,16 @@ const InteractiveHobbies: React.FC<InteractiveHobbiesProps> = React.memo(({ hobb
 
                                 {/* Content Layer */}
                                 <div className="relative z-20 mt-auto pt-16">
-                                    <h4 className="text-lg font-bold text-white mb-2 group-hover:text-white transition-colors">
+                                    <h4 className="text-lg font-bold text-white mb-2">
                                         {hobby.title}
                                     </h4>
 
                                     {/* Description reveals smoothly on hover and mobile tap */}
-                                    <div className="max-h-0 md:max-h-none opacity-0 md:opacity-100 overflow-hidden group-hover:max-h-40 group-active:max-h-40 group-focus:max-h-40 group-hover:opacity-100 group-active:opacity-100 transition-all duration-500 ease-out mt-0 group-hover:mt-2 group-active:mt-2">
+                                    <div className="max-h-0 md:max-h-none opacity-0 md:opacity-100 overflow-hidden group-hover:max-h-40 group-active:max-h-40 group-focus:max-h-40 group-hover:opacity-100 group-active:opacity-100 transition-[max-height,opacity,margin] duration-300 ease-out mt-0 group-hover:mt-2 group-active:mt-2">
                                         <p className="text-sm text-gray-400 line-clamp-4 leading-relaxed pb-2">
                                             {hobby.description}
                                         </p>
                                     </div>
-                                </div>
-
-                                {/* Diagonal Stripes Overlay (Subtle Pattern) */}
-                                <div className="absolute inset-0 opacity-0 group-hover:opacity-[0.15] transition-opacity duration-500 pointer-events-none"
-                                    style={{ backgroundImage: 'repeating-linear-gradient(45deg, #000 0, #000 1px, transparent 0, transparent 50%)', backgroundSize: '10px 10px' }}>
                                 </div>
                             </div>
                         );
