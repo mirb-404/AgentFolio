@@ -1,5 +1,5 @@
 export default async function handler(req, res) {
-    const username = req.query.username || 'Bloodwingv2';
+    const username = req.query.username || 'mirb-404';
     const CACHE_DURATION = 6 * 60 * 60; // 6 hours in seconds
 
     try {

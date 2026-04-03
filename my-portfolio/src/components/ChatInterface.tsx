@@ -130,14 +130,15 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, acti
     const handleSendMessage = (text: string) => {
         if (!text.trim()) return;
 
-        if (!hasStarted) {
-            onStart();
-        }
-
-        // Check for special commands
+        // Check for special commands before triggering onStart,
+        // so commands like 'matrix' don't navigate away from the hero page.
         if (processCommand(text)) {
             setInputValue("");
             return;
+        }
+
+        if (!hasStarted) {
+            onStart();
         }
 
         const userMsg: Message = {
