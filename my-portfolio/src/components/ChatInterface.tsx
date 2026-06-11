@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { gsap } from 'gsap';
 import { useGSAP } from '@gsap/react';
+import { gsap, SplitText, motionTier, burstAt } from '../lib/motion';
 import ChatMessage from './ChatMessage';
 import ActionButtons from './ActionButtons';
 import MatrixEffect from './MatrixEffect';
@@ -30,6 +30,24 @@ interface ChatInterfaceProps {
     setIsSidebarOpen: (isOpen: boolean) => void;
 }
 
+/** Tool-name chip that decodes in with a scramble effect */
+const ScrambleLabel: React.FC<{ text: string }> = ({ text }) => {
+    const ref = useRef<HTMLSpanElement>(null);
+    useGSAP(() => {
+        if (!ref.current || motionTier() === 'off') return;
+        gsap.fromTo(ref.current.parentElement,
+            { scale: 0.6, opacity: 0 },
+            { scale: 1, opacity: 1, duration: 0.5, ease: 'back.out(2.2)' }
+        );
+        gsap.to(ref.current, {
+            duration: 0.7,
+            scrambleText: { text, chars: '01<>/_$#&', speed: 0.5 },
+            ease: 'none',
+        });
+    }, [text]);
+    return <span ref={ref}>{text}</span>;
+};
+
 
 const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, activePrompt, onPromptHandled, isSidebarOpen, setIsSidebarOpen }) => {
     const [messages, setMessages] = useState<Message[]>([]);
@@ -43,6 +61,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, acti
     // Refs for animations
     const containerRef = useRef<HTMLDivElement>(null);
     const heroRef = useRef<HTMLDivElement>(null);
+    const nameRef = useRef<HTMLHeadingElement>(null);
+    const sendBtnRef = useRef<HTMLButtonElement>(null);
     const chatRef = useRef<HTMLDivElement>(null);
     const bottomRef = useRef<HTMLDivElement>(null);
     const abortControllerRef = useRef<AbortController | null>(null);
@@ -83,27 +103,61 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, acti
         }
     }, [activePrompt]);
 
-    // GSAP Transitions
+    // GSAP Transitions — hero shatters into the warp jump, chat materializes after
     useGSAP(() => {
+        const tier = motionTier();
+
         if (hasStarted) {
-            // Animate Hero OUT, Chat IN
             const tl = gsap.timeline();
-            tl.to(heroRef.current, {
-                opacity: 0,
-                y: -20,
-                duration: 0.5,
-                pointerEvents: 'none',
-                display: 'none'
-            })
-                .to(chatRef.current, {
-                    display: 'flex',
-                    opacity: 1,
-                    y: 0,
-                    duration: 0.5,
-                    pointerEvents: 'all'
-                });
+
+            if (tier === 'full' && nameRef.current) {
+                // Name explodes char-by-char with real gravity, timed with the warp jump
+                const split = new SplitText(nameRef.current, { type: 'chars' });
+                tl.to(split.chars, {
+                    duration: 0.95,
+                    physics2D: {
+                        velocity: 'random(260, 620)',
+                        angle: 'random(235, 305)',
+                        gravity: 1700,
+                    },
+                    rotation: 'random(-150, 150)',
+                    opacity: 0,
+                    ease: 'none',
+                    stagger: { amount: 0.14, from: 'center' },
+                }, 0)
+                    // The rest of the hero gets pulled into the jump — blur + recede
+                    .to('[data-hero-item]', {
+                        opacity: 0,
+                        y: -34,
+                        scale: 0.92,
+                        filter: 'blur(10px)',
+                        duration: 0.55,
+                        ease: 'power2.in',
+                        stagger: 0.045,
+                    }, 0.05)
+                    .set(heroRef.current, { display: 'none', pointerEvents: 'none' })
+                    .call(() => split.revert())
+                    .fromTo(chatRef.current,
+                        { opacity: 0, y: 26, scale: 0.985, filter: 'blur(6px)' },
+                        {
+                            display: 'flex', opacity: 1, y: 0, scale: 1, filter: 'blur(0px)',
+                            duration: 0.55, ease: 'agentOut', pointerEvents: 'all',
+                            clearProps: 'filter',
+                        });
+            } else {
+                // lite / off — fast clean swap
+                const dur = tier === 'off' ? 0.01 : 0.35;
+                tl.to(heroRef.current, {
+                    opacity: 0, y: -16, duration: dur,
+                    pointerEvents: 'none', display: 'none',
+                })
+                    .to(chatRef.current, {
+                        display: 'flex', opacity: 1, y: 0,
+                        duration: dur, pointerEvents: 'all',
+                    });
+            }
         } else {
-            // Animate Hero IN, Chat OUT
+            // Back to hero — restore anything the shatter left behind
             const tl = gsap.timeline();
             tl.to(chatRef.current, {
                 opacity: 0,
@@ -112,6 +166,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, acti
                 display: 'none',
                 pointerEvents: 'none'
             })
+                .set('[data-hero-item]', { clearProps: 'all' })
                 .to(heroRef.current, {
                     display: 'flex',
                     opacity: 1,
@@ -690,7 +745,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, acti
                 <div className="flex flex-col items-center text-center max-w-sm w-full mx-auto gap-2 sm:gap-3 lg:gap-4">
 
                     {/* Profile image — gradient ring */}
-                    <div className="relative">
+                    <div className="relative" data-hero-item>
                         <div className="p-[2px] rounded-full bg-gradient-to-br from-blue-500 to-purple-600">
                             <div className="p-[3px] rounded-full bg-[#080808]">
                                 <img
@@ -709,22 +764,22 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, acti
 
                     {/* Name + Role */}
                     <div className="space-y-1">
-                        <p className="text-[#484848] text-[10px] sm:text-[11px] font-mono tracking-[0.18em] uppercase">Hi, I'm</p>
-                        <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-white tracking-tight leading-[1.05]">
+                        <p className="text-[#484848] text-[10px] sm:text-[11px] font-mono tracking-[0.18em] uppercase" data-hero-item>Hi, I'm</p>
+                        <h2 ref={nameRef} className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-white tracking-tight leading-[1.05]">
                             {portfolioData.name}
                         </h2>
-                        <p className="text-sm sm:text-[15px] font-medium pt-0.5 bg-gradient-to-r from-blue-400 via-blue-300 to-cyan-400 bg-clip-text text-transparent">
+                        <p className="text-sm sm:text-[15px] font-medium pt-0.5 bg-gradient-to-r from-blue-400 via-blue-300 to-cyan-400 bg-clip-text text-transparent" data-hero-item>
                             {portfolioData.role}
                         </p>
                     </div>
 
                     {/* Tagline */}
-                    <p className="text-[#545454] text-xs sm:text-sm leading-relaxed max-w-xs">
+                    <p className="text-[#545454] text-xs sm:text-sm leading-relaxed max-w-xs" data-hero-item>
                         Ask me anything about my work, projects, or experience.
                     </p>
 
                     {/* Stats strip */}
-                    <div className="flex items-center gap-4 sm:gap-6 lg:gap-7 py-2.5 sm:py-3 px-5 sm:px-6 rounded-2xl border border-[#161616] bg-[#0d0d0d]">
+                    <div className="flex items-center gap-4 sm:gap-6 lg:gap-7 py-2.5 sm:py-3 px-5 sm:px-6 rounded-2xl border border-[#161616] bg-[#0d0d0d]" data-hero-item>
                         {portfolioData.heroStats.map((stat, i, arr) => (
                             <React.Fragment key={stat.label}>
                                 <div className="flex flex-col items-center gap-0.5">
@@ -739,7 +794,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, acti
                     {/* CTA */}
                     <button
                         onClick={onStart}
-                        className="group flex items-center gap-2 sm:gap-2.5 px-6 sm:px-8 py-3 sm:py-3.5 bg-white text-black font-semibold text-sm rounded-xl hover:bg-gray-100 transition-all hover:scale-[1.02] active:scale-[0.98] shadow-xl shadow-white/5"
+                        data-hero-item
+                        data-magnetic
+                        className="group flex items-center gap-2 sm:gap-2.5 px-6 sm:px-8 py-3 sm:py-3.5 bg-white text-black font-semibold text-sm rounded-xl hover:bg-gray-100 transition-colors shadow-xl shadow-white/5"
                     >
                         Start Chatting
                         <Send size={13} className="group-hover:translate-x-0.5 transition-transform duration-150" />
@@ -784,8 +841,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, acti
                                             <Activity size={11} className="text-[#4a4a4a] shrink-0 animate-pulse" />
                                             <span className="break-all sm:break-normal font-mono">
                                                 calling{' '}
-                                                <span className="text-blue-400/70 bg-blue-500/8 border border-blue-500/15 px-1.5 py-0.5 rounded-md">
-                                                    {fakeToolName || "fetch_github_activity"}
+                                                <span className="inline-block text-blue-400/70 bg-blue-500/8 border border-blue-500/15 px-1.5 py-0.5 rounded-md">
+                                                    <ScrambleLabel text={fakeToolName || "fetch_github_activity"} />
                                                 </span>
                                             </span>
                                         </div>
@@ -844,7 +901,14 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, acti
                     />
 
                     <form
-                        onSubmit={(e) => { e.preventDefault(); handleSendMessage(inputValue); }}
+                        onSubmit={(e) => {
+                            e.preventDefault();
+                            if (inputValue.trim() && sendBtnRef.current) {
+                                const r = sendBtnRef.current.getBoundingClientRect();
+                                burstAt(r.left + r.width / 2, r.top + r.height / 2);
+                            }
+                            handleSendMessage(inputValue);
+                        }}
                         className="flex gap-2 mt-1.5 relative items-center bg-[#111] p-1.5 rounded-xl border border-[#1e1e1e] focus-within:border-blue-500/30 focus-within:ring-1 focus-within:ring-blue-500/8 transition-all duration-200"
                     >
                         <input
@@ -856,9 +920,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, acti
                             className="flex-1 bg-transparent text-[#e8e8e8] px-3 py-2 text-sm sm:text-[15px] outline-none placeholder:text-[#363636] font-sans disabled:opacity-40 disabled:cursor-not-allowed"
                         />
                         <button
+                            ref={sendBtnRef}
                             type="submit"
                             disabled={!inputValue.trim() || isTyping || isFetchingTool}
-                            className="p-2 sm:p-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-500 disabled:opacity-30 disabled:cursor-not-allowed transition-all hover:scale-105 active:scale-95 shrink-0"
+                            data-magnetic
+                            className="p-2 sm:p-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-500 disabled:opacity-30 disabled:cursor-not-allowed transition-colors shrink-0"
                         >
                             <Send size={14} className="sm:hidden" />
                             <Send size={15} className="hidden sm:block" />

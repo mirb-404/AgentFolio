@@ -7,7 +7,7 @@ interface LayoutProps {
     children: React.ReactNode;
     onHomeClick?: () => void;
     onMenuClick?: () => void;
-    onBlogClick?: () => void;
+    onBlogClick?: (origin?: { x: number; y: number }) => void;
 }
 
 const Layout: React.FC<LayoutProps> = ({ children, onHomeClick, onMenuClick, onBlogClick }) => {
@@ -39,10 +39,13 @@ const Layout: React.FC<LayoutProps> = ({ children, onHomeClick, onMenuClick, onB
                 </div>
 
                 {/* Blog Button — rotating white-shine border */}
-                <div className="relative flex blog-shine-wrap rounded-[10px] shrink-0 group">
+                <div className="relative flex blog-shine-wrap rounded-[10px] shrink-0 group" data-magnetic>
                     <span className="sm:hidden absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-green-400 z-10 pointer-events-none" />
                     <button
-                        onClick={onBlogClick}
+                        onClick={(e) => {
+                            const r = e.currentTarget.getBoundingClientRect();
+                            onBlogClick?.({ x: r.left + r.width / 2, y: r.top + r.height / 2 });
+                        }}
                         className="blog-shine-inner"
                         title="View Blog"
                     >
@@ -68,6 +71,7 @@ const Layout: React.FC<LayoutProps> = ({ children, onHomeClick, onMenuClick, onB
                                 rel="noopener noreferrer"
                                 className="p-2 text-[#525252] hover:text-white hover:bg-[#141414] rounded-lg transition-all duration-150"
                                 title={social.name}
+                                data-magnetic
                             >
                                 <Icon size={16} />
                             </a>

@@ -1,6 +1,6 @@
 import React, { useRef, useMemo } from 'react';
 import { useGSAP } from '@gsap/react';
-import gsap from 'gsap';
+import { gsap, motionTier } from '../lib/motion';
 import { User, Download, ChevronLeft, ChevronRight } from 'lucide-react';
 import { portfolioData } from '../data/portfolioData';
 import ProjectCard from './ProjectCard';
@@ -212,12 +212,32 @@ const ChatMessage: React.FC<ChatMessageProps> = React.memo(({ role, content, onP
     const containerRef = useRef<HTMLDivElement>(null);
 
     useGSAP(() => {
-        gsap.from(containerRef.current, {
-            y: 20,
-            opacity: 0,
-            duration: 0.5,
-            ease: "power3.out"
-        });
+        const tier = motionTier();
+        if (tier === 'off') return;
+
+        if (role === 'user') {
+            // User message snaps in from the right with an elastic settle
+            gsap.from(containerRef.current, {
+                x: tier === 'lite' ? 18 : 36,
+                y: 10,
+                opacity: 0,
+                scale: 0.94,
+                transformOrigin: 'right center',
+                duration: tier === 'lite' ? 0.4 : 0.7,
+                ease: tier === 'lite' ? 'power3.out' : 'agentOut',
+                clearProps: 'transform',
+            });
+        } else {
+            // Agent message decodes in — blur dissolve from below
+            gsap.fromTo(containerRef.current,
+                { y: 22, opacity: 0, filter: 'blur(8px)' },
+                {
+                    y: 0, opacity: 1, filter: 'blur(0px)',
+                    duration: tier === 'lite' ? 0.4 : 0.6,
+                    ease: 'power3.out',
+                    clearProps: 'filter,transform',
+                });
+        }
     }, { scope: containerRef });
 
     return (

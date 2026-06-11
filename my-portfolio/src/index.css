@@ -126,9 +126,14 @@ body, html {
   background: #0c1120;
 }
 
-/* Blog page — initial hidden state; GSAP drives both enter and exit */
+/* Blog page — initial hidden state; GSAP drives the clip-path portal enter/exit */
 .blog-page-enter {
   opacity: 0;
-  transform: scale(0.98);
-  will-change: opacity, transform;
+  will-change: clip-path, opacity;
+}
+
+/* Kill decorative CSS loops for users who opt out of motion */
+@media (prefers-reduced-motion: reduce) {
+  .blog-shine-wrap { animation: none; }
+  .animate-status-ping { animation: none; }
 }
