@@ -39,10 +39,10 @@ const ActionButtons: React.FC<ActionButtonsProps> = ({ prompts, onSelect, isDisa
         <div className="relative group w-full max-w-full">
             {/* Left Arrow */}
             <div className={`absolute left-0 top-0 bottom-2 z-10 flex items-center justify-center w-10 transition-opacity duration-200 ${showLeftArrow ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
-                <div className="absolute inset-0 bg-gradient-to-r from-[#080808] to-transparent pointer-events-none" />
+                <div className="absolute inset-0 bg-gradient-to-r from-[#121212] to-transparent pointer-events-none" />
                 <button
                     onClick={() => scroll('left')}
-                    className="relative z-10 p-1.5 bg-[#111] border border-[#202020] text-[#505050] hover:text-white hover:border-[#303030] rounded-full transition-all"
+                    className="relative z-10 p-1.5 bg-[#1a1a1a] border border-[#2a2a2a] text-[#8a8a85] hover:text-[#f2f1ec] hover:border-[#3d3d3d] rounded-full transition-all"
                     aria-label="Scroll left"
                 >
                     <ChevronLeft size={14} />
@@ -64,10 +64,10 @@ const ActionButtons: React.FC<ActionButtonsProps> = ({ prompts, onSelect, isDisa
                             }
                         }}
                         disabled={isDisabled}
-                        className={`whitespace-nowrap px-3 py-1.5 sm:px-3.5 sm:py-1.5 bg-[#0e0e0e] border border-[#1c1c1c] rounded-full text-[11px] sm:text-xs text-[#545454] snap-start shrink-0 transition-all duration-150
+                        className={`whitespace-nowrap px-3 py-1.5 sm:px-3.5 sm:py-1.5 bg-[#0f0f0f] border border-[#232323] rounded-full text-[11px] sm:text-xs text-[#8a8a85] snap-start shrink-0 transition-all duration-150
                             ${isDisabled
                                 ? 'opacity-30 cursor-not-allowed'
-                                : 'hover:bg-[#161616] hover:border-[#282828] hover:text-[#c0c0c0] hover:scale-[1.02] active:scale-[0.98] cursor-pointer'
+                                : 'hover:bg-[#1a1a1a] hover:border-[#22d3ee]/30 hover:text-[#f2f1ec] hover:scale-[1.02] active:scale-[0.98] cursor-pointer'
                             }`}
                     >
                         {prompt}
@@ -77,10 +77,10 @@ const ActionButtons: React.FC<ActionButtonsProps> = ({ prompts, onSelect, isDisa
 
             {/* Right Arrow */}
             <div className={`absolute right-0 top-0 bottom-2 z-10 flex items-center justify-center w-10 transition-opacity duration-200 ${showRightArrow ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
-                <div className="absolute inset-0 bg-gradient-to-l from-[#080808] to-transparent pointer-events-none" />
+                <div className="absolute inset-0 bg-gradient-to-l from-[#121212] to-transparent pointer-events-none" />
                 <button
                     onClick={() => scroll('right')}
-                    className="relative z-10 p-1.5 bg-[#111] border border-[#202020] text-[#505050] hover:text-white hover:border-[#303030] rounded-full transition-all"
+                    className="relative z-10 p-1.5 bg-[#1a1a1a] border border-[#2a2a2a] text-[#8a8a85] hover:text-[#f2f1ec] hover:border-[#3d3d3d] rounded-full transition-all"
                     aria-label="Scroll right"
                 >
                     <ChevronRight size={14} />

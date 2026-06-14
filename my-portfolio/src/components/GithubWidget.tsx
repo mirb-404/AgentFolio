@@ -74,7 +74,7 @@ const GithubWidget: React.FC = () => {
                     <div className="flex-1 min-w-0">
                         <h3 className="text-[13px] sm:text-sm font-display tracking-wider text-white flex items-center gap-2">
                             {username}
-                            {isLoading && <Activity className="w-3 h-3 text-blue-500 animate-pulse shrink-0" />}
+                            {isLoading && <Activity className="w-3 h-3 text-[#22d3ee] animate-pulse shrink-0" />}
                         </h3>
                         <p className="text-[11px] sm:text-xs text-[#585858] mt-0.5 truncate font-mono">
                             {stats?.bio || "Software Engineer & AI Researcher"}
@@ -96,7 +96,7 @@ const GithubWidget: React.FC = () => {
             {/* Metrics */}
             <div className="grid grid-cols-2 divide-x divide-[#141414] border-b border-[#141414]">
                 <div className="p-4 sm:p-5 flex items-center gap-3">
-                    <div className="p-2 bg-[#111] rounded-xl border border-[#1e1e1e] text-blue-500/70 shrink-0">
+                    <div className="p-2 bg-[#111] rounded-xl border border-[#1e1e1e] text-[#22d3ee]/80 shrink-0">
                         <BookOpen className="w-4 h-4" />
                     </div>
                     <div>
@@ -108,7 +108,7 @@ const GithubWidget: React.FC = () => {
                 </div>
 
                 <div className="p-4 sm:p-5 flex items-center gap-3">
-                    <div className="p-2 bg-[#111] rounded-xl border border-[#1e1e1e] text-blue-500/70 shrink-0">
+                    <div className="p-2 bg-[#111] rounded-xl border border-[#1e1e1e] text-[#22d3ee]/80 shrink-0">
                         <Users className="w-4 h-4" />
                     </div>
                     <div>

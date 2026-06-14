@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
 import { useGSAP } from '@gsap/react';
-import gsap from 'gsap';
+import { gsap } from '../lib/motion';
 import { Camera, Mountain, BookOpen, Gamepad2, Brain, Github, Star, Coffee, Printer, Music, Telescope, Code2, Cpu, Globe, Rocket, MonitorPlay, Joystick, PenTool, Lightbulb } from 'lucide-react';
 import type { LucideProps } from 'lucide-react';
 
@@ -26,14 +26,30 @@ const InteractiveHobbies: React.FC<InteractiveHobbiesProps> = React.memo(({ hobb
         const isMobile = window.innerWidth < 768;
 
         gsap.from(".interactive-hobby-card", {
-            y: isMobile ? 20 : 40,
+            y: isMobile ? 20 : 44,
             opacity: 0,
-            rotationX: isMobile ? 0 : 10,
-            duration: isMobile ? 0.4 : 0.8,
-            stagger: isMobile ? 0 : 0.1, // Disable stagger on mobile
+            scale: isMobile ? 1 : 0.96,
+            rotationX: isMobile ? 0 : 9,
+            filter: isMobile ? 'none' : 'blur(8px)',
+            duration: isMobile ? 0.4 : 0.75,
+            stagger: isMobile ? 0 : 0.09, // Disable stagger on mobile
             ease: "power3.out",
             clearProps: "all"
         });
+
+        if (!isMobile) {
+            // Icons pop after their cards settle
+            gsap.from(".interactive-hobby-card .hobby-icon", {
+                scale: 0.4,
+                rotation: -14,
+                opacity: 0,
+                duration: 0.55,
+                stagger: 0.09,
+                delay: 0.3,
+                ease: "back.out(2.2)",
+                clearProps: "all"
+            });
+        }
 
         if (containerRef.current) {
             containerRef.current.dataset.animated = "true";
@@ -79,7 +95,7 @@ const InteractiveHobbies: React.FC<InteractiveHobbiesProps> = React.memo(({ hobb
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
                     {hobbies.map((hobby, idx) => {
-                        const styleColor = hobby.color || "#8b5cf6"; // Default purple
+                        const styleColor = hobby.color || "#22d3ee"; // Default cyan
                         const isLarge = idx === 0 || idx === 3; // Make some cards larger for bento effect
 
                         return (
@@ -109,7 +125,7 @@ const InteractiveHobbies: React.FC<InteractiveHobbiesProps> = React.memo(({ hobb
                                 {/* Icon Layer */}
                                 <div className="absolute top-6 left-6 z-10">
                                     <div
-                                        className="p-3 rounded-xl bg-gray-900/90 border border-white/10 group-hover:scale-110 transition-transform duration-300 ease-out shadow-lg"
+                                        className="hobby-icon p-3 rounded-xl bg-[#141414]/90 border border-white/10 group-hover:scale-110 transition-transform duration-300 ease-out shadow-lg"
                                         style={{ color: styleColor }}
                                     >
                                         {getIcon(hobby.icon, { size: 24 })}

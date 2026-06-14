@@ -1,15 +1,17 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { gsap } from 'gsap';
+import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { useGSAP } from '@gsap/react';
+import { gsap, SplitText, motionTier, burstAt } from '../lib/motion';
 import ChatMessage from './ChatMessage';
 import ActionButtons from './ActionButtons';
-import MatrixEffect from './MatrixEffect';
 import ThinkingVisualizer from './ThinkingVisualizer';
 import Sidebar from './Sidebar';
-import ProjectDetailModal from './ProjectDetailModal';
+import CommandPalette from './CommandPalette';
 import ContactForm from './ContactForm';
 import { portfolioData, suggestPrompts } from '../data/portfolioData';
 import { Send, Terminal, Menu, ChevronLeft, Activity } from 'lucide-react';
+
+const MatrixEffect = lazy(() => import('./MatrixEffect'));
+const ProjectDetailModal = lazy(() => import('./ProjectDetailModal'));
 import { githubActivityToolDefinition, fetchGithubActivity } from './githubAgent';
 
 type Message = {
@@ -30,6 +32,45 @@ interface ChatInterfaceProps {
     setIsSidebarOpen: (isOpen: boolean) => void;
 }
 
+/** Tool-name chip that decodes in with a scramble effect */
+const ScrambleLabel: React.FC<{ text: string }> = ({ text }) => {
+    const ref = useRef<HTMLSpanElement>(null);
+    useGSAP(() => {
+        if (!ref.current || motionTier() === 'off') return;
+        gsap.fromTo(ref.current.parentElement,
+            { scale: 0.6, opacity: 0 },
+            { scale: 1, opacity: 1, duration: 0.5, ease: 'back.out(2.2)' }
+        );
+        gsap.to(ref.current, {
+            duration: 0.7,
+            scrambleText: { text, chars: '01<>/_$#&', speed: 0.5 },
+            ease: 'none',
+        });
+    }, [text]);
+    return <span ref={ref}>{text}</span>;
+};
+
+/** Fake-real telemetry strip under the chat input */
+const StatusBar: React.FC = () => {
+    const [ms, setMs] = useState(24);
+    useEffect(() => {
+        const id = setInterval(() => setMs(16 + Math.round(Math.random() * 26)), 3200);
+        return () => clearInterval(id);
+    }, []);
+    return (
+        <div className="flex items-center justify-between px-2.5 pt-1.5 text-[10px] font-mono text-[#555550]">
+            <span className="flex items-center gap-1.5">
+                <span className="relative flex w-1.5 h-1.5">
+                    <span className="absolute inline-flex h-full w-full rounded-full bg-[#22d3ee] opacity-60 animate-status-ping" />
+                    <span className="relative inline-flex w-1.5 h-1.5 rounded-full bg-[#22d3ee]" />
+                </span>
+                agent online · llama-3.1-8b
+            </span>
+            <span>edge cache · {ms}ms</span>
+        </div>
+    );
+};
+
 
 const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, activePrompt, onPromptHandled, isSidebarOpen, setIsSidebarOpen }) => {
     const [messages, setMessages] = useState<Message[]>([]);
@@ -43,12 +84,40 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, acti
     // Refs for animations
     const containerRef = useRef<HTMLDivElement>(null);
     const heroRef = useRef<HTMLDivElement>(null);
+    const nameRef = useRef<HTMLHeadingElement>(null);
+    const sendBtnRef = useRef<HTMLButtonElement>(null);
+    const inputDockRef = useRef<HTMLDivElement>(null);
     const chatRef = useRef<HTMLDivElement>(null);
     const bottomRef = useRef<HTMLDivElement>(null);
     const abortControllerRef = useRef<AbortController | null>(null);
+    // First message from the hero is held until the world transition finishes
+    const pendingPromptRef = useRef<string | null>(null);
+    // Only one SplitText may own the headline at a time — overlapping splits
+    // (entrance vs shatter vs return-home) nest wrappers and corrupt the text metrics
+    const activeSplitRef = useRef<SplitText | null>(null);
+    const releaseSplit = () => {
+        activeSplitRef.current?.revert();
+        activeSplitRef.current = null;
+    };
     // Scroll handling
     const messagesContainerRef = useRef<HTMLDivElement>(null);
+    const messagesContentRef = useRef<HTMLDivElement>(null);
     const shouldAutoScrollRef = useRef(true);
+
+    // Widgets (project decks, timelines, charts) grow well after the stream ends —
+    // track content height so the output stays in view instead of hiding below the fold
+    useEffect(() => {
+        const content = messagesContentRef.current;
+        if (!content) return;
+        const observer = new ResizeObserver(() => {
+            if (shouldAutoScrollRef.current && messagesContainerRef.current) {
+                const el = messagesContainerRef.current;
+                el.scrollTop = el.scrollHeight - el.clientHeight;
+            }
+        });
+        observer.observe(content);
+        return () => observer.disconnect();
+    }, []);
 
     const scrollToBottom = (instant = false) => {
         const el = messagesContainerRef.current;
@@ -66,14 +135,19 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, acti
         }
     };
 
-    // Monitor scroll position
+    // Scroll intent: only a deliberate upward gesture disables follow mode.
+    // (The old onScroll check raced with our own smooth-scroll tween and the
+    // ResizeObserver — mid-tween positions read as "not at bottom" and killed follow.)
     const handleScroll = () => {
         if (messagesContainerRef.current) {
             const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
-            const isAtBottom = scrollHeight - scrollTop - clientHeight < 100;
-            shouldAutoScrollRef.current = isAtBottom;
+            if (scrollHeight - scrollTop - clientHeight < 100) {
+                shouldAutoScrollRef.current = true; // re-engage when user returns to bottom
+            }
         }
     };
+    const disengageFollow = () => { shouldAutoScrollRef.current = false; };
+    const touchStartYRef = useRef(0);
 
     // Handle External Prompts (Sidebar)
     useEffect(() => {
@@ -83,42 +157,159 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, acti
         }
     }, [activePrompt]);
 
-    // GSAP Transitions
+    // Entrance — splash hands off to a staged hero reveal (runs once on mount).
+    // SplitText must measure the real webfont, so everything starts hidden and
+    // the reveal waits for fonts (instant when the splash already loaded them).
+    useGSAP((_, contextSafe) => {
+        if (motionTier() === 'off' || hasStarted) return;
+
+        gsap.set(nameRef.current, { autoAlpha: 0 });
+        gsap.set('[data-hero-item]', { autoAlpha: 0 });
+
+        let cancelled = false;
+        const fontsReady = document.fonts?.ready ?? Promise.resolve();
+        const safety = new Promise((r) => setTimeout(r, 2500));
+
+        Promise.race([fontsReady, safety]).then(contextSafe!(() => {
+            // bail if the user already jumped into the chat — the return
+            // cascade owns the hero reveal from here on
+            if (cancelled || prevStartedRef.current || !nameRef.current) return;
+            const tl = gsap.timeline({ defaults: { ease: 'power3.out' } });
+
+            // Name rises out of a per-char mask — metrics are now correct
+            gsap.set(nameRef.current, { autoAlpha: 1 });
+            const split = new SplitText(nameRef.current, { type: 'chars', mask: 'chars' });
+            activeSplitRef.current = split;
+            tl.from(split.chars, {
+                yPercent: 110,
+                duration: 0.9,
+                stagger: { amount: 0.28, from: 'center' },
+                ease: 'power4.out',
+                onComplete: () => {
+                    if (activeSplitRef.current === split) releaseSplit();
+                },
+            }, 0.1);
+
+            tl.fromTo('[data-hero-item]',
+                { autoAlpha: 0, y: 26 },
+                { autoAlpha: 1, y: 0, duration: 0.7, stagger: 0.1, clearProps: 'opacity,visibility,transform' },
+                0.35);
+        }));
+
+        return () => { cancelled = true; };
+    }, { scope: containerRef });
+
+    // GSAP Transitions — hero shatters into the warp jump, chat materializes after
+    const prevStartedRef = useRef(false);
+    const transitionTlRef = useRef<gsap.core.Timeline | null>(null);
     useGSAP(() => {
+        const tier = motionTier();
+        const wasStarted = prevStartedRef.current;
+        prevStartedRef.current = hasStarted;
+
+        // A direction change mid-flight (e.g. home clicked while the chat is still
+        // materializing) must kill the old timeline — otherwise both worlds keep
+        // animating and the layout ends up half-and-half
+        transitionTlRef.current?.kill();
+        transitionTlRef.current = null;
+
         if (hasStarted) {
-            // Animate Hero OUT, Chat IN
             const tl = gsap.timeline();
-            tl.to(heroRef.current, {
-                opacity: 0,
-                y: -20,
-                duration: 0.5,
-                pointerEvents: 'none',
-                display: 'none'
-            })
-                .to(chatRef.current, {
-                    display: 'flex',
-                    opacity: 1,
-                    y: 0,
-                    duration: 0.5,
-                    pointerEvents: 'all'
-                });
+            transitionTlRef.current = tl;
+
+            if (tier === 'full' && nameRef.current) {
+                // Name slips up through a per-char mask — quiet exit, mirrors the entrance.
+                // Release any split still owning the headline (e.g. entrance mid-flight) first.
+                releaseSplit();
+                const split = new SplitText(nameRef.current, { type: 'chars', mask: 'chars' });
+                activeSplitRef.current = split;
+                tl.to(split.chars, {
+                    yPercent: -110,
+                    duration: 0.55,
+                    ease: 'power2.in',
+                    stagger: { amount: 0.14, from: 'center' },
+                }, 0)
+                    // The rest of the hero gets pulled into the jump — blur + recede
+                    .to('[data-hero-item]', {
+                        opacity: 0,
+                        y: -34,
+                        scale: 0.92,
+                        filter: 'blur(10px)',
+                        duration: 0.55,
+                        ease: 'power2.in',
+                        stagger: 0.045,
+                    }, 0.05)
+                    .set(heroRef.current, { display: 'none', pointerEvents: 'none' })
+                    .call(() => {
+                        if (activeSplitRef.current === split) releaseSplit();
+                    })
+                    .fromTo(chatRef.current,
+                        { opacity: 0, y: 26, scale: 0.985, filter: 'blur(6px)' },
+                        {
+                            display: 'flex', opacity: 1, y: 0, scale: 1, filter: 'blur(0px)',
+                            duration: 0.55, ease: 'agentOut', pointerEvents: 'all',
+                            clearProps: 'filter',
+                        })
+                    .fromTo(inputDockRef.current,
+                        { opacity: 0, y: 24 },
+                        { display: 'block', opacity: 1, y: 0, duration: 0.45, ease: 'agentOut' },
+                        '-=0.35')
+                    .call(flushPendingPrompt);
+            } else {
+                // lite / off — fast clean swap
+                const dur = tier === 'off' ? 0.01 : 0.35;
+                tl.to(heroRef.current, {
+                    opacity: 0, y: -16, duration: dur,
+                    pointerEvents: 'none', display: 'none',
+                })
+                    .to(chatRef.current, {
+                        display: 'flex', opacity: 1, y: 0,
+                        duration: dur, pointerEvents: 'all',
+                    })
+                    .to(inputDockRef.current, { display: 'block', opacity: 1, duration: dur }, '<')
+                    .call(flushPendingPrompt);
+            }
         } else {
-            // Animate Hero IN, Chat OUT
-            const tl = gsap.timeline();
+            // Initial mount: the entrance timeline owns the hero; chat is already hidden via CSS
+            if (!wasStarted) return;
+
+            // Headline must be plain text before the return cascade — a split interrupted
+            // mid-shatter would otherwise leave nested wrappers that distort font metrics
+            releaseSplit();
+
+            if (tier === 'off') {
+                gsap.set(chatRef.current, { display: 'none', opacity: 0, pointerEvents: 'none' });
+                gsap.set(inputDockRef.current, { display: 'none', opacity: 0 });
+                gsap.set('[data-hero-item]', { clearProps: 'all' });
+                gsap.set(heroRef.current, { display: 'flex', opacity: 1, y: 0, pointerEvents: 'all' });
+                return;
+            }
+
+            // Back to hero — chat dissolves down with blur, hero re-materializes in a cascade.
+            // Every hero element is parked in its hidden state BEFORE the hero becomes
+            // visible, so nothing flashes at full opacity and then re-animates.
+            const tl = gsap.timeline({ defaults: { ease: 'power3.out' } });
+            transitionTlRef.current = tl;
             tl.to(chatRef.current, {
                 opacity: 0,
-                y: 20,
-                duration: 0.3,
+                y: 16,
+                filter: 'blur(6px)',
+                duration: 0.35,
+                ease: 'power2.in',
                 display: 'none',
-                pointerEvents: 'none'
+                pointerEvents: 'none',
+                clearProps: 'filter',
             })
-                .to(heroRef.current, {
-                    display: 'flex',
-                    opacity: 1,
-                    y: 0,
-                    duration: 0.5,
-                    pointerEvents: 'all'
-                });
+                .to(inputDockRef.current, { opacity: 0, y: 10, display: 'none', duration: 0.28, ease: 'power2.in' }, 0)
+                .set('[data-hero-item]', { clearProps: 'all' })
+                .set('[data-hero-item]', { autoAlpha: 0, y: 18 })
+                .set(nameRef.current, { autoAlpha: 0, y: 12 })
+                .set(heroRef.current, { display: 'flex', opacity: 1, y: 0, pointerEvents: 'all' })
+                .to(nameRef.current,
+                    { autoAlpha: 1, y: 0, duration: 0.55, clearProps: 'opacity,visibility,transform' })
+                .to('[data-hero-item]',
+                    { autoAlpha: 1, y: 0, duration: 0.5, stagger: 0.08, clearProps: 'opacity,visibility,transform' },
+                    '-=0.4');
         }
     }, { scope: containerRef, dependencies: [hasStarted] });
 
@@ -137,6 +328,30 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, acti
         }
     }, [messages, isTyping]);
 
+    const dispatchMessage = (text: string) => {
+        shouldAutoScrollRef.current = true;
+        scrollToBottom();
+
+        const userMsg: Message = {
+            id: Date.now().toString(),
+            role: 'user',
+            content: text
+        };
+
+        setMessages(prev => [...prev, userMsg]);
+        setIsTyping(true);
+
+        const currentMessages = [...messages, userMsg]; // Capture immediate state
+        generateResponseStream(text, currentMessages);
+    };
+
+    // Runs from the world-transition timeline once the chat is actually visible
+    const flushPendingPrompt = () => {
+        const pending = pendingPromptRef.current;
+        pendingPromptRef.current = null;
+        if (pending) dispatchMessage(pending);
+    };
+
     const handleSendMessage = (text: string) => {
         if (!text.trim()) return;
 
@@ -147,25 +362,17 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, acti
             return;
         }
 
-        shouldAutoScrollRef.current = true;
-        scrollToBottom();
+        setInputValue("");
 
         if (!hasStarted) {
+            // Hold the message until the hero-shatter transition lands in the chat,
+            // so the user actually sees their prompt execute.
+            pendingPromptRef.current = text;
             onStart();
+            return;
         }
 
-        const userMsg: Message = {
-            id: Date.now().toString(),
-            role: 'user',
-            content: text
-        };
-
-        setMessages(prev => [...prev, userMsg]);
-        setInputValue("");
-        setIsTyping(true);
-
-        const currentMessages = [...messages, userMsg]; // Capture immediate state
-        generateResponseStream(text, currentMessages);
+        dispatchMessage(text);
     };
 
     const processCommand = (input: string): boolean => {
@@ -685,65 +892,36 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, acti
             <>
             <div
                 ref={heroRef}
-                className="flex-1 w-full flex flex-col items-center justify-center py-2 sm:py-3 lg:py-4 px-4 overflow-hidden"
+                className="flex-1 w-full flex flex-col items-center justify-center px-4 overflow-hidden relative z-10"
             >
-                <div className="flex flex-col items-center text-center max-w-sm w-full mx-auto gap-2 sm:gap-3 lg:gap-4">
+                <div className="flex flex-col items-center text-center w-full max-w-[760px] mx-auto lg:-mt-[40px]">
 
-                    {/* Profile image — gradient ring */}
-                    <div className="relative">
-                        <div className="p-[2px] rounded-full bg-gradient-to-br from-blue-500 to-purple-600">
-                            <div className="p-[3px] rounded-full bg-[#080808]">
-                                <img
-                                    src={portfolioData.profileImage}
-                                    alt={portfolioData.name}
-                                    width="128"
-                                    height="128"
-                                    className="w-20 h-20 sm:w-24 sm:h-24 lg:w-28 lg:h-28 rounded-full object-cover"
-                                    fetchPriority="high"
-                                    decoding="sync"
-                                    loading="eager"
-                                />
-                            </div>
-                        </div>
+                    {/* Status badge */}
+                    <div data-hero-item className="flex items-center gap-2.5 bg-[#141414] border border-[#232323] rounded-full px-4 py-1.5">
+                        <span className="relative flex w-1.5 h-1.5">
+                            <span className="absolute inline-flex h-full w-full rounded-full bg-[#22d3ee] opacity-60 animate-status-ping" />
+                            <span className="relative inline-flex w-1.5 h-1.5 rounded-full bg-[#22d3ee]" />
+                        </span>
+                        <span className="text-[#8a8a85] text-[12px] font-mono tracking-wide">agent online</span>
                     </div>
 
-                    {/* Name + Role */}
-                    <div className="space-y-1">
-                        <p className="text-[#484848] text-[10px] sm:text-[11px] font-mono tracking-[0.18em] uppercase">Hi, I'm</p>
-                        <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-white tracking-tight leading-[1.05]">
-                            {portfolioData.name}
-                        </h2>
-                        <p className="text-sm sm:text-[15px] font-medium pt-0.5 bg-gradient-to-r from-blue-400 via-blue-300 to-cyan-400 bg-clip-text text-transparent">
-                            {portfolioData.role}
-                        </p>
-                    </div>
+                    {/* Headline */}
+                    <h2
+                        ref={nameRef}
+                        className="font-fustat font-medium text-[#f2f1ec] text-[42px] sm:text-6xl lg:text-[80px] leading-none tracking-[-0.02em] mt-[34px]"
+                    >
+                        {portfolioData.name}
+                    </h2>
 
-                    {/* Tagline */}
-                    <p className="text-[#545454] text-xs sm:text-sm leading-relaxed max-w-xs">
-                        Ask me anything about my work, projects, or experience.
+                    {/* Subtitle */}
+                    <p data-hero-item className="font-fustat font-medium text-[#8a8a85] text-base sm:text-xl tracking-[-0.02em] mt-[30px] max-w-[620px] px-2">
+                        {portfolioData.role}. Ask my agent anything — it answers like me.
                     </p>
 
-                    {/* Stats strip */}
-                    <div className="flex items-center gap-4 sm:gap-6 lg:gap-7 py-2.5 sm:py-3 px-5 sm:px-6 rounded-2xl border border-[#161616] bg-[#0d0d0d]">
-                        {portfolioData.heroStats.map((stat, i, arr) => (
-                            <React.Fragment key={stat.label}>
-                                <div className="flex flex-col items-center gap-0.5">
-                                    <span className="text-white font-bold text-sm sm:text-base lg:text-lg leading-none">{stat.value}</span>
-                                    <span className="text-[#484848] text-[9px] sm:text-[10px] lg:text-[11px] font-mono">{stat.label}</span>
-                                </div>
-                                {i < arr.length - 1 && <span className="w-px h-6 sm:h-7 bg-[#181818]" />}
-                            </React.Fragment>
-                        ))}
+                    {/* Command palette — the front door */}
+                    <div data-hero-item className="w-full flex justify-center mt-[40px]">
+                        <CommandPalette onSubmit={handleSendMessage} />
                     </div>
-
-                    {/* CTA */}
-                    <button
-                        onClick={onStart}
-                        className="group flex items-center gap-2 sm:gap-2.5 px-6 sm:px-8 py-3 sm:py-3.5 bg-white text-black font-semibold text-sm rounded-xl hover:bg-gray-100 transition-all hover:scale-[1.02] active:scale-[0.98] shadow-xl shadow-white/5"
-                    >
-                        Start Chatting
-                        <Send size={13} className="group-hover:translate-x-0.5 transition-transform duration-150" />
-                    </button>
 
                 </div>
             </div>
@@ -756,8 +934,12 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, acti
                 <div
                     ref={messagesContainerRef}
                     onScroll={handleScroll}
+                    onWheel={(e) => { if (e.deltaY < 0) disengageFollow(); }}
+                    onTouchStart={(e) => { touchStartYRef.current = e.touches[0].clientY; }}
+                    onTouchMove={(e) => { if (e.touches[0].clientY > touchStartYRef.current + 8) disengageFollow(); }}
                     className="flex-1 overflow-y-auto px-2 py-4"
                 >
+                    <div ref={messagesContentRef}>
                     {messages.filter(m => m.role !== 'tool' && !m.tool_calls && !(m.isStreaming && m.content === '')).map((msg) => (
                         <ChatMessage
                             key={msg.id}
@@ -771,21 +953,21 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, acti
                     {(isTyping || isFetchingTool) && !messages.some(m => m.isStreaming && m.content !== '') && (
                         <div className="flex w-full mb-5 justify-start">
                             <div className="flex max-w-[85%] flex-row gap-2.5">
-                                <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 bg-[#111] border border-[#1f1f1f] text-[#484848]">
+                                <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 bg-[#141414] border border-[#232323] text-[#8a8a85]">
                                     <Terminal size={15} />
                                 </div>
                                 <div className="flex flex-col gap-1.5 max-w-full overflow-hidden">
-                                    <div className="px-4 py-2.5 rounded-2xl rounded-tl-sm bg-[#0f0f0f] border border-[#1c1c1c] text-gray-400 text-sm flex items-center gap-3 w-fit max-w-full">
+                                    <div className="px-4 py-2.5 rounded-2xl rounded-tl-sm bg-[#121212] border border-[#232323] text-[#8a8a85] text-sm flex items-center gap-3 w-fit max-w-full">
                                         <ThinkingVisualizer />
-                                        <span className="text-[11px] text-[#404040] font-mono self-center whitespace-nowrap">pid:404</span>
+                                        <span className="text-[11px] text-[#555550] font-mono self-center whitespace-nowrap">pid:404</span>
                                     </div>
                                     {isFetchingTool && (
-                                        <div className="flex flex-wrap items-center gap-1.5 px-1 text-[#404040] text-[11px] mt-0.5 max-w-full">
-                                            <Activity size={11} className="text-[#4a4a4a] shrink-0 animate-pulse" />
+                                        <div className="flex flex-wrap items-center gap-1.5 px-1 text-[#8a8a85] text-[11px] mt-0.5 max-w-full">
+                                            <Activity size={11} className="text-[#22d3ee] shrink-0 animate-pulse" />
                                             <span className="break-all sm:break-normal font-mono">
                                                 calling{' '}
-                                                <span className="text-blue-400/70 bg-blue-500/8 border border-blue-500/15 px-1.5 py-0.5 rounded-md">
-                                                    {fakeToolName || "fetch_github_activity"}
+                                                <span className="inline-block text-[#67e8f9] bg-[#22d3ee]/10 border border-[#22d3ee]/25 px-1.5 py-0.5 rounded-md">
+                                                    <ScrambleLabel text={fakeToolName || "fetch_github_activity"} />
                                                 </span>
                                             </span>
                                         </div>
@@ -795,19 +977,26 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, acti
                         </div>
                     )}
                     <div ref={bottomRef} />
+                    </div>
                 </div>
             </div>
 
             {/* Project Detail Modal */}
             {selectedProject && (
-                <ProjectDetailModal
-                    project={selectedProject}
-                    onClose={() => setSelectedProject(null)}
-                />
+                <Suspense fallback={null}>
+                    <ProjectDetailModal
+                        project={selectedProject}
+                        onClose={() => setSelectedProject(null)}
+                    />
+                </Suspense>
             )}
 
             {/* Matrix Effect Overlay */}
-            {showMatrix && <MatrixEffect onExit={() => setShowMatrix(false)} />}
+            {showMatrix && (
+                <Suspense fallback={null}>
+                    <MatrixEffect onExit={() => setShowMatrix(false)} />
+                </Suspense>
+            )}
 
             {/* Sidebar */}
             <Sidebar
@@ -818,25 +1007,27 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, acti
                 isDisabled={isTyping || isFetchingTool}
             />
 
-            {/* Toggle Sidebar Button - Desktop Only */}
-            <button
-                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                className={`hidden sm:block fixed top-1/2 -translate-y-1/2 z-[60] p-2.5 text-[#484848] hover:text-white bg-[#0f0f0f] border border-[#1e1e1e] transition-all duration-300 ease-out shadow-xl hover:border-[#2a2a2a] ${isSidebarOpen
-                    ? 'left-72 sm:left-80 rounded-r-xl border-l-[#0f0f0f]'
-                    : 'left-0 rounded-r-xl border-l-0'
-                    }`}
-                aria-label="Toggle Menu"
-            >
-                {isSidebarOpen ? <ChevronLeft size={20} /> : <Menu size={20} />}
-            </button>
+            {/* Toggle Sidebar Button - Desktop, chat world only */}
+            {hasStarted && (
+                <button
+                    onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                    className={`hidden sm:block fixed top-1/2 -translate-y-1/2 z-[60] p-2.5 text-[#8a8a85] hover:text-[#f2f1ec] bg-[#141414] border border-[#232323] transition-all duration-300 ease-out shadow-lg hover:border-[#2e2e2e] ${isSidebarOpen
+                        ? 'left-72 sm:left-80 rounded-r-xl border-l-[#141414]'
+                        : 'left-0 rounded-r-xl border-l-0'
+                        }`}
+                    aria-label="Toggle Menu"
+                >
+                    {isSidebarOpen ? <ChevronLeft size={20} /> : <Menu size={20} />}
+                </button>
+            )}
 
-            {/* Input Area */}
-            <div className="relative pb-3 z-20">
+            {/* Input Area — chat world only; hero uses the search box */}
+            <div ref={inputDockRef} className="relative pb-3 z-20 hidden opacity-0">
                 {/* Gradient bleed — dissolves messages into the input card */}
-                <div className="absolute -top-10 left-0 right-0 h-10 bg-gradient-to-b from-transparent to-[#080808] pointer-events-none" />
+                <div className="absolute -top-10 left-0 right-0 h-10 bg-gradient-to-b from-transparent to-[#0a0a0a] pointer-events-none" />
 
                 {/* Floating card */}
-                <div className="bg-[#0c0c0c] border border-[#1a1a1a] rounded-2xl p-2 pt-1.5">
+                <div className="bg-[#121212] border border-[#232323] rounded-2xl p-2 pt-1.5">
                     <ActionButtons
                         prompts={suggestPrompts}
                         onSelect={handleSendMessage}
@@ -844,8 +1035,15 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, acti
                     />
 
                     <form
-                        onSubmit={(e) => { e.preventDefault(); handleSendMessage(inputValue); }}
-                        className="flex gap-2 mt-1.5 relative items-center bg-[#111] p-1.5 rounded-xl border border-[#1e1e1e] focus-within:border-blue-500/30 focus-within:ring-1 focus-within:ring-blue-500/8 transition-all duration-200"
+                        onSubmit={(e) => {
+                            e.preventDefault();
+                            if (inputValue.trim() && sendBtnRef.current) {
+                                const r = sendBtnRef.current.getBoundingClientRect();
+                                burstAt(r.left + r.width / 2, r.top + r.height / 2);
+                            }
+                            handleSendMessage(inputValue);
+                        }}
+                        className="flex gap-2 mt-1.5 relative items-center bg-[#0f0f0f] p-1.5 rounded-xl border border-[#232323] focus-within:border-[#22d3ee]/35 focus-within:ring-1 focus-within:ring-[#22d3ee]/10 transition-all duration-200"
                     >
                         <input
                             type="text"
@@ -853,18 +1051,23 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, acti
                             onChange={(e) => setInputValue(e.target.value)}
                             placeholder="Ask me anything..."
                             disabled={isTyping || isFetchingTool}
-                            className="flex-1 bg-transparent text-[#e8e8e8] px-3 py-2 text-sm sm:text-[15px] outline-none placeholder:text-[#363636] font-sans disabled:opacity-40 disabled:cursor-not-allowed"
+                            className="flex-1 bg-transparent text-[#f2f1ec] px-3 py-2 text-sm sm:text-[15px] outline-none placeholder:text-[#555550] font-sans disabled:opacity-40 disabled:cursor-not-allowed"
                         />
                         <button
+                            ref={sendBtnRef}
                             type="submit"
                             disabled={!inputValue.trim() || isTyping || isFetchingTool}
-                            className="p-2 sm:p-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-500 disabled:opacity-30 disabled:cursor-not-allowed transition-all hover:scale-105 active:scale-95 shrink-0"
+                            data-magnetic
+                            className="p-2 sm:p-2.5 bg-[#22d3ee] text-[#0a0a0a] rounded-xl hover:bg-[#67e8f9] disabled:opacity-30 disabled:cursor-not-allowed transition-colors shrink-0"
                         >
                             <Send size={14} className="sm:hidden" />
                             <Send size={15} className="hidden sm:block" />
                         </button>
                     </form>
                 </div>
+
+                {/* Telemetry strip */}
+                <StatusBar />
             </div>
             </>
         </div>

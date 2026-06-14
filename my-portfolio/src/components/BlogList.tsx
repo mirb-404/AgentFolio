@@ -95,7 +95,7 @@ const BlogList: React.FC<BlogListProps> = ({ onSelectBlog, onClose }) => {
             <span className="text-sm font-medium hidden sm:inline">Home</span>
           </button>
 
-          <h1 className="font-display text-base sm:text-lg font-bold text-[#111] tracking-tight shrink-0">
+          <h1 className="font-display text-base sm:text-lg font-medium text-[#111] tracking-tight shrink-0">
             Writings
           </h1>
 
@@ -196,7 +196,7 @@ const BlogList: React.FC<BlogListProps> = ({ onSelectBlog, onClose }) => {
                   <span className="text-[10px] font-semibold text-[#bbb] uppercase tracking-[0.18em]">Featured</span>
                 </div>
 
-                <h2 className="font-display text-[20px] sm:text-[24px] font-bold text-[#111] leading-tight tracking-tight group-hover:text-blue-700 transition-colors mb-3">
+                <h2 className="font-display text-[20px] sm:text-[24px] font-medium text-[#111] leading-tight tracking-tight group-hover:text-blue-700 transition-colors mb-3">
                   {featured.title}
                 </h2>
 
@@ -253,7 +253,7 @@ const BlogList: React.FC<BlogListProps> = ({ onSelectBlog, onClose }) => {
 
                     <div className="flex-1 min-w-0">
                       <CategoryBadge category={post.category} />
-                      <h3 className="font-display text-sm sm:text-[15px] font-bold text-[#111] group-hover:text-blue-700 leading-snug transition-colors mt-2 mb-1.5 line-clamp-2 break-words">
+                      <h3 className="font-display text-sm sm:text-[15px] font-medium text-[#111] group-hover:text-blue-700 leading-snug transition-colors mt-2 mb-1.5 line-clamp-2 break-words">
                         {post.title}
                       </h3>
                       <p className="text-xs text-[#888] leading-relaxed line-clamp-2 mb-2 break-words">

@@ -44,11 +44,11 @@ const ThinkingVisualizer: React.FC = () => {
                     ctx.lineTo(x, y);
                 }
 
-                // Fade out at edges
+                // Fade out at edges — cyan thinking waves
                 const gradient = ctx.createLinearGradient(0, 0, width, 0);
-                gradient.addColorStop(0, "rgba(255, 255, 255, 0)");
-                gradient.addColorStop(0.5, `rgba(255, 255, 255, ${0.3 + Math.sin(time) * 0.2})`);
-                gradient.addColorStop(1, "rgba(255, 255, 255, 0)");
+                gradient.addColorStop(0, "rgba(34, 211, 238, 0)");
+                gradient.addColorStop(0.5, `rgba(34, 211, 238, ${0.45 + Math.sin(time) * 0.25})`);
+                gradient.addColorStop(1, "rgba(34, 211, 238, 0)");
 
                 ctx.strokeStyle = gradient;
                 ctx.lineWidth = 1.5;

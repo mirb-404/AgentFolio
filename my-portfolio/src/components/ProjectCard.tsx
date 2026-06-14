@@ -60,7 +60,7 @@ const ProjectCard: React.FC<ProjectCardProps> = React.memo(({ project, onClick }
                 }}
             >
                 {/* Main Content Container - Image Background */}
-                <div className="absolute inset-0 bg-gray-900 rounded-xl overflow-hidden border border-gray-800">
+                <div className="absolute inset-0 bg-[#0f0f0f] rounded-xl overflow-hidden border border-[#232323]">
 
                     {/* Background Image */}
                     <div
@@ -73,10 +73,10 @@ const ProjectCard: React.FC<ProjectCardProps> = React.memo(({ project, onClick }
 
                     {/* Content */}
                     <div className="absolute bottom-0 left-0 w-full p-4 sm:p-5 flex flex-col items-start translate-z-20">
-                        <span className="px-1.5 py-0.5 sm:px-2 sm:py-1 mb-1 sm:mb-2 text-[8px] sm:text-[10px] md:text-xs font-bold tracking-wider text-blue-400 bg-blue-900/30 border border-blue-500/30 rounded uppercase backdrop-blur-md">
+                        <span className="px-1.5 py-0.5 sm:px-2 sm:py-1 mb-1 sm:mb-2 text-[8px] sm:text-[10px] md:text-xs font-bold tracking-wider text-[#67e8f9] bg-[#22d3ee]/10 border border-[#22d3ee]/25 rounded uppercase backdrop-blur-md">
                             {project.category}
                         </span>
-                        <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-white leading-tight mb-1 group-hover:text-blue-300 transition-colors">
+                        <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-white leading-tight mb-1 group-hover:text-[#67e8f9] transition-colors">
                             {project.title}
                         </h3>
                         <p className="text-[10px] sm:text-xs md:text-sm text-gray-400 line-clamp-2 mb-1 sm:mb-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 transform translate-y-2 group-hover:translate-y-0">
@@ -91,7 +91,7 @@ const ProjectCard: React.FC<ProjectCardProps> = React.memo(({ project, onClick }
                                 <span className="text-[9px] font-semibold text-red-400 uppercase tracking-widest">New</span>
                             </div>
                         )}
-                        <div className="p-2 bg-black/40 backdrop-blur-sm border border-white/10 rounded-full text-white/70 group-hover:text-white group-hover:bg-blue-600 group-hover:border-blue-500 transition-all duration-300">
+                        <div className="p-2 bg-black/40 backdrop-blur-sm border border-white/10 rounded-full text-white/70 group-hover:text-[#0a0a0a] group-hover:bg-[#22d3ee] group-hover:border-[#22d3ee] transition-all duration-300">
                             <ArrowUpRight size={16} />
                         </div>
                     </div>
@@ -99,7 +99,7 @@ const ProjectCard: React.FC<ProjectCardProps> = React.memo(({ project, onClick }
 
                 {/* Holographic Border Glow */}
                 <div
-                    className={`absolute -inset-[1px] bg-gradient-to-tr from-blue-500/0 via-blue-500/40 to-purple-500/0 rounded-xl opacity-0 transition-opacity duration-300 pointer-events-none ${isHovered ? 'opacity-100' : ''}`}
+                    className={`absolute -inset-[1px] bg-gradient-to-tr from-[#22d3ee]/0 via-[#22d3ee]/40 to-[#67e8f9]/0 rounded-xl opacity-0 transition-opacity duration-300 pointer-events-none ${isHovered ? 'opacity-100' : ''}`}
                     style={{ transform: 'translateZ(-1px)' }}
                 />
             </div>

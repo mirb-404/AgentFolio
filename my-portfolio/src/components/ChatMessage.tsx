@@ -1,6 +1,6 @@
 import React, { useRef, useMemo } from 'react';
 import { useGSAP } from '@gsap/react';
-import gsap from 'gsap';
+import { gsap, motionTier } from '../lib/motion';
 import { User, Download, ChevronLeft, ChevronRight } from 'lucide-react';
 import { portfolioData } from '../data/portfolioData';
 import ProjectCard from './ProjectCard';
@@ -185,17 +185,17 @@ const RichMessageContent: React.FC<{ content: string; onProjectSelect?: (project
                         <ReactMarkdown
                             remarkPlugins={[remarkGfm]}
                             components={{
-                                strong: ({ node, ...props }: any) => <span className="font-bold text-white" {...props} />,
-                                ul: ({ node, ...props }: any) => <ul className="list-disc list-outside ml-4 my-2 space-y-1 text-gray-300" {...props} />,
-                                ol: ({ node, ...props }: any) => <ol className="list-decimal list-outside ml-4 my-2 space-y-1 text-gray-300" {...props} />,
+                                strong: ({ node, ...props }: any) => <span className="font-bold text-[#f2f1ec]" {...props} />,
+                                ul: ({ node, ...props }: any) => <ul className="list-disc list-outside ml-4 my-2 space-y-1 text-[#a8a8a2]" {...props} />,
+                                ol: ({ node, ...props }: any) => <ol className="list-decimal list-outside ml-4 my-2 space-y-1 text-[#a8a8a2]" {...props} />,
                                 li: ({ node, ...props }: any) => <li className="pl-1 leading-relaxed text-xs sm:text-sm" {...props} />,
-                                p: ({ node, ...props }: any) => <p className="mb-2 last:mb-0 leading-relaxed text-gray-200 text-xs sm:text-sm md:text-[15px]" {...props} />,
-                                a: ({ node, ...props }: any) => <a className="text-blue-400 hover:text-blue-300 hover:underline transition-colors font-medium text-xs sm:text-sm" target="_blank" rel="noopener noreferrer" {...props} />,
-                                code: ({ node, ...props }: any) => <span className="font-mono text-[10px] sm:text-xs text-yellow-200/90 bg-white/5 px-1 py-0.5 rounded" {...props} />,
-                                h1: ({ node, ...props }: any) => <h1 className="text-base sm:text-lg md:text-xl font-bold text-white mb-2 mt-4" {...props} />,
-                                h2: ({ node, ...props }: any) => <h2 className="text-sm sm:text-base md:text-lg font-bold text-white mb-2 mt-4" {...props} />,
-                                h3: ({ node, ...props }: any) => <h3 className="text-sm sm:text-[15px] font-bold text-white mb-1 mt-3" {...props} />,
-                                blockquote: ({ node, ...props }: any) => <blockquote className="border-l-4 border-gray-700 pl-4 py-1 my-2 italic text-gray-400 text-xs sm:text-sm" {...props} />,
+                                p: ({ node, ...props }: any) => <p className="mb-2 last:mb-0 leading-relaxed text-[#d6d5cf] text-xs sm:text-sm md:text-[15px]" {...props} />,
+                                a: ({ node, ...props }: any) => <a className="text-[#67e8f9] hover:text-[#22d3ee] hover:underline transition-colors font-medium text-xs sm:text-sm" target="_blank" rel="noopener noreferrer" {...props} />,
+                                code: ({ node, ...props }: any) => <span className="font-mono text-[10px] sm:text-xs text-[#67e8f9] bg-[#22d3ee]/10 px-1 py-0.5 rounded" {...props} />,
+                                h1: ({ node, ...props }: any) => <h1 className="text-base sm:text-lg md:text-xl font-bold text-[#f2f1ec] mb-2 mt-4" {...props} />,
+                                h2: ({ node, ...props }: any) => <h2 className="text-sm sm:text-base md:text-lg font-bold text-[#f2f1ec] mb-2 mt-4" {...props} />,
+                                h3: ({ node, ...props }: any) => <h3 className="text-sm sm:text-[15px] font-bold text-[#f2f1ec] mb-1 mt-3" {...props} />,
+                                blockquote: ({ node, ...props }: any) => <blockquote className="border-l-4 border-[#2e2e2e] pl-4 py-1 my-2 italic text-[#8a8a85] text-xs sm:text-sm" {...props} />,
                             }}
                         >
                             {part}
@@ -212,12 +212,32 @@ const ChatMessage: React.FC<ChatMessageProps> = React.memo(({ role, content, onP
     const containerRef = useRef<HTMLDivElement>(null);
 
     useGSAP(() => {
-        gsap.from(containerRef.current, {
-            y: 20,
-            opacity: 0,
-            duration: 0.5,
-            ease: "power3.out"
-        });
+        const tier = motionTier();
+        if (tier === 'off') return;
+
+        if (role === 'user') {
+            // User message snaps in from the right with an elastic settle
+            gsap.from(containerRef.current, {
+                x: tier === 'lite' ? 18 : 36,
+                y: 10,
+                opacity: 0,
+                scale: 0.94,
+                transformOrigin: 'right center',
+                duration: tier === 'lite' ? 0.4 : 0.7,
+                ease: tier === 'lite' ? 'power3.out' : 'agentOut',
+                clearProps: 'transform',
+            });
+        } else {
+            // Agent message decodes in — blur dissolve from below
+            gsap.fromTo(containerRef.current,
+                { y: 22, opacity: 0, filter: 'blur(8px)' },
+                {
+                    y: 0, opacity: 1, filter: 'blur(0px)',
+                    duration: tier === 'lite' ? 0.4 : 0.6,
+                    ease: 'power3.out',
+                    clearProps: 'filter,transform',
+                });
+        }
     }, { scope: containerRef });
 
     return (
@@ -227,8 +247,8 @@ const ChatMessage: React.FC<ChatMessageProps> = React.memo(({ role, content, onP
                 {/* Avatar */}
                 <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center shrink-0 overflow-hidden ${
                     role === 'agent'
-                        ? 'ring-1 ring-[#222]'
-                        : 'bg-[#181818] border border-[#252525] text-[#525252]'
+                        ? 'ring-1 ring-[#232323]'
+                        : 'bg-[#141414] border border-[#232323] text-[#8a8a85]'
                 }`}>
                     {role === 'agent'
                         ? <img src={meImg} className="w-full h-full object-cover rounded-full" alt="Agent" />
@@ -240,8 +260,8 @@ const ChatMessage: React.FC<ChatMessageProps> = React.memo(({ role, content, onP
                 <div className={`flex flex-col gap-1 ${role === 'user' ? 'items-end' : 'items-start'}`}>
                     <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed ${
                         role === 'agent'
-                            ? 'bg-[#0f0f0f] border border-[#1c1c1c] text-[#d0d0d0] rounded-tl-sm'
-                            : 'bg-white text-black rounded-tr-sm font-medium shadow-sm'
+                            ? 'bg-[#121212] border border-[#232323] text-[#d6d5cf] rounded-tl-sm'
+                            : 'bg-[#f2f1ec] text-[#0a0a0a] rounded-tr-sm font-medium shadow-sm'
                     }`}>
                         {role === 'agent' && typeof content === 'string' ? (
                             <RichMessageContent content={content} onProjectSelect={onProjectSelect} />

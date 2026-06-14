@@ -16,28 +16,42 @@ const secretCommands = [
 ];
 
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, onClear, onCommandSelect, isDisabled = false }) => {
+    // Obsidian palette — one dark world
+    const c = {
+        panel: 'bg-[#0f0f0f] border-r border-[#1f1f1f]',
+        title: 'text-[#f2f1ec]', titleIcon: 'text-[#8a8a85]',
+        closeBtn: 'hover:bg-[#1a1a1a] text-[#8a8a85] hover:text-[#f2f1ec]',
+        sectionLabel: 'text-[#555550]',
+        itemHover: 'hover:bg-[#1a1a1a]',
+        chip: 'bg-[#141414] border-[#262626] text-[#8a8a85] group-hover:border-[#22d3ee]/40 group-hover:text-[#22d3ee]',
+        chipDisabled: 'bg-[#141414] border-[#1f1f1f] text-[#3d3d3d]',
+        cmd: 'text-[#d6d5cf]', cmdDisabled: 'text-[#4a4a45]',
+        desc: 'text-[#8a8a85]', descDisabled: 'text-[#3d3d3d]',
+        footer: 'border-t border-[#1f1f1f]',
+    };
+
     return (
         <>
             {/* Backdrop */}
             <div
-                className={`fixed inset-0 bg-black/60 backdrop-blur-sm z-40 transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+                className={`fixed inset-0 bg-[#14130f]/40 backdrop-blur-sm z-40 transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
                 onClick={onClose}
             />
 
             {/* Panel */}
             <div
-                className={`fixed top-0 left-0 h-full w-72 sm:w-80 bg-[#090909] border-r border-[#161616] z-50 transform transition-transform duration-300 ease-out ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}
+                className={`fixed top-0 left-0 h-full w-72 sm:w-80 ${c.panel} z-50 transform transition-transform duration-300 ease-out ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}
             >
                 <div className="flex flex-col h-full p-5">
                     {/* Header */}
                     <div className="flex justify-between items-center mb-7">
-                        <h2 className="text-[15px] font-bold text-white flex items-center gap-2 font-display tracking-wide">
-                            <Terminal size={16} className="text-[#505050]" />
+                        <h2 className={`text-[15px] font-bold ${c.title} flex items-center gap-2 font-grotesk tracking-wide`}>
+                            <Terminal size={16} className={c.titleIcon} />
                             <span>System Control</span>
                         </h2>
                         <button
                             onClick={onClose}
-                            className="p-1.5 hover:bg-[#141414] rounded-lg text-[#484848] hover:text-white transition-colors"
+                            className={`p-1.5 rounded-lg transition-colors ${c.closeBtn}`}
                         >
                             <X size={17} />
                         </button>
@@ -45,7 +59,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, onClear, onCommandSe
 
                     {/* Commands */}
                     <div className="flex-1 overflow-y-auto">
-                        <h3 className="text-[10px] font-semibold text-[#383838] uppercase tracking-[0.15em] mb-3 px-1 font-mono">
+                        <h3 className={`text-[10px] font-semibold ${c.sectionLabel} uppercase tracking-[0.15em] mb-3 px-1 font-mono`}>
                             Secret Commands
                         </h3>
                         <div className="space-y-0.5">
@@ -59,21 +73,17 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, onClear, onCommandSe
                                         }
                                     }}
                                     disabled={isDisabled}
-                                    className={`w-full text-left group p-2.5 rounded-xl transition-all ${isDisabled ? 'opacity-40 cursor-not-allowed' : 'hover:bg-[#141414]'}`}
+                                    className={`w-full text-left group p-2.5 rounded-xl transition-all ${isDisabled ? 'opacity-40 cursor-not-allowed' : c.itemHover}`}
                                 >
                                     <div className="flex items-center gap-3">
-                                        <div className={`w-6 h-6 flex items-center justify-center rounded-lg border transition-colors ${
-                                            isDisabled
-                                                ? 'bg-[#111] border-[#1a1a1a] text-[#383838]'
-                                                : 'bg-[#111] border-[#1e1e1e] text-[#505050] group-hover:border-[#2a2a2a] group-hover:text-[#909090]'
-                                        }`}>
+                                        <div className={`w-6 h-6 flex items-center justify-center rounded-lg border transition-colors ${isDisabled ? c.chipDisabled : c.chip}`}>
                                             <ChevronRight size={12} />
                                         </div>
                                         <div>
-                                            <code className={`text-sm font-medium font-mono block ${isDisabled ? 'text-[#444]' : 'text-[#c0c0c0]'}`}>
+                                            <code className={`text-sm font-medium font-mono block ${isDisabled ? c.cmdDisabled : c.cmd}`}>
                                                 {item.cmd}
                                             </code>
-                                            <p className={`text-xs ${isDisabled ? 'text-[#333]' : 'text-[#484848]'}`}>
+                                            <p className={`text-xs ${isDisabled ? c.descDisabled : c.desc}`}>
                                                 {item.desc}
                                             </p>
                                         </div>
@@ -84,7 +94,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, onClear, onCommandSe
                     </div>
 
                     {/* Footer */}
-                    <div className="pt-5 border-t border-[#141414] mt-auto">
+                    <div className={`pt-5 ${c.footer} mt-auto`}>
                         <button
                             onClick={() => {
                                 if (!isDisabled) {

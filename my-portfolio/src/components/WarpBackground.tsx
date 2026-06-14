@@ -1,7 +1,13 @@
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
+import { gsap, motionTier, hasFinePointer } from '../lib/motion';
 
 interface WarpBackgroundProps {
     active: boolean;
+}
+
+export interface WarpHandle {
+    /** Hyperspeed jump: stars accelerate hard, streaks stretch, chromatic split — then decays. */
+    jump: () => void;
 }
 
 interface Star {
@@ -13,35 +19,60 @@ interface Star {
 }
 
 // Tuning knobs
-const NUM_STARS = 450;
 const BASE_SPEED = 0.0028;       // very gentle drift
 const Z_INCREMENT = 0.0022;      // how fast stars "approach"
 const TRAIL_ALPHA = 0.10;        // lower = longer trails (slower fade)
 const FADE_LERP = 0.018;         // opacity transition speed (~1.8s to fully fade)
+const PARALLAX = 0.07;           // how far the warp centre drifts toward the cursor
+const CENTER_LERP = 0.04;        // smoothing for centre movement
 
-function resetStar(star: Star) {
-    // Spawn from a tight cluster at viewport center
+function resetStar(star: Star, cx: number, cy: number) {
+    // Spawn from a tight cluster at the warp centre
     const angle = Math.random() * Math.PI * 2;
     const r = Math.random() * 0.04;
-    star.x = 0.5 + Math.cos(angle) * r;
-    star.y = 0.5 + Math.sin(angle) * r;
+    star.x = cx + Math.cos(angle) * r;
+    star.y = cy + Math.sin(angle) * r;
     star.z = 0;
     star.px = star.x;
     star.py = star.y;
 }
 
-const WarpBackground: React.FC<WarpBackgroundProps> = ({ active }) => {
+const WarpBackground = forwardRef<WarpHandle, WarpBackgroundProps>(({ active }, ref) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const starsRef = useRef<Star[]>([]);
     const rafRef = useRef<number>(0);
     const opacityRef = useRef<number>(0);
     const targetRef = useRef<number>(0);
+    // Warp centre follows the cursor with a lazy lerp (desktop only)
+    const centerRef = useRef({ x: 0.5, y: 0.5 });
+    const centerTargetRef = useRef({ x: 0.5, y: 0.5 });
+    // 1 = idle drift; tweened up hard during a jump
+    const speedRef = useRef({ mult: 1 });
+    const activeRef = useRef(false);
+    const clearedRef = useRef(true);
+
+    useImperativeHandle(ref, () => ({
+        jump: () => {
+            const tier = motionTier();
+            if (tier === 'off') return;
+            const peak = tier === 'lite' ? 10 : 22;
+            // Force visible for the jump even if the layer is normally hidden
+            targetRef.current = 1;
+            opacityRef.current = Math.max(opacityRef.current, 0.85);
+            gsap.timeline({
+                onComplete: () => { targetRef.current = activeRef.current ? 1 : 0; },
+            })
+                .to(speedRef.current, { mult: peak, duration: 0.7, ease: 'power3.in' })
+                .to(speedRef.current, { mult: 1, duration: 1.1, ease: 'power2.out' }, '+=0.25');
+        },
+    }), []);
 
     // Initialise stars spread across all depths so the canvas isn't empty on mount
     useEffect(() => {
-        starsRef.current = Array.from({ length: NUM_STARS }, () => {
+        const numStars = motionTier() === 'full' ? 450 : 240;
+        starsRef.current = Array.from({ length: numStars }, () => {
             const star: Star = { x: 0, y: 0, z: 0, px: 0, py: 0 };
-            resetStar(star);
+            resetStar(star, 0.5, 0.5);
             // Pre-advance so stars are scattered, not all at centre
             const advance = Math.random();
             star.z = advance;
@@ -55,11 +86,25 @@ const WarpBackground: React.FC<WarpBackgroundProps> = ({ active }) => {
         });
     }, []);
 
+    // Cursor parallax — warp centre leans toward the mouse
+    useEffect(() => {
+        if (!hasFinePointer() || motionTier() !== 'full') return;
+        const onMove = (e: MouseEvent) => {
+            const nx = e.clientX / window.innerWidth - 0.5;   // -0.5 … 0.5
+            const ny = e.clientY / window.innerHeight - 0.5;
+            centerTargetRef.current.x = 0.5 + nx * 2 * PARALLAX;
+            centerTargetRef.current.y = 0.5 + ny * 2 * PARALLAX;
+        };
+        window.addEventListener('mousemove', onMove, { passive: true });
+        return () => window.removeEventListener('mousemove', onMove);
+    }, []);
+
     // Main animation loop
     useEffect(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
         let alive = true;
+        const fullTier = motionTier() === 'full';
 
         const loop = () => {
             if (!alive) return;
@@ -73,58 +118,97 @@ const WarpBackground: React.FC<WarpBackgroundProps> = ({ active }) => {
                 opacityRef.current = targetRef.current;
             }
 
-            // Nothing to draw while fully faded out
-            if (opacityRef.current < 0.004) return;
+            // Visibility lives on the element so the layer can sit above the video
+            canvas.style.opacity = String(opacityRef.current);
 
             const ctx = canvas.getContext('2d');
             if (!ctx) return;
 
+            // Fully faded: wipe accumulated trails once so the canvas goes transparent
+            if (opacityRef.current < 0.004) {
+                if (!clearedRef.current) {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    clearedRef.current = true;
+                }
+                return;
+            }
+            clearedRef.current = false;
+
             const W = canvas.width;
             const H = canvas.height;
 
-            // Fade previous frame — produces the motion-blur streak
-            ctx.globalAlpha = 1;
-            ctx.fillStyle = `rgba(8,8,8,${TRAIL_ALPHA})`;
-            ctx.fillRect(0, 0, W, H);
+            // Ease the warp centre toward its target
+            const c = centerRef.current;
+            const ct = centerTargetRef.current;
+            c.x += (ct.x - c.x) * CENTER_LERP;
+            c.y += (ct.y - c.y) * CENTER_LERP;
 
-            ctx.globalAlpha = opacityRef.current;
+            const mult = speedRef.current.mult;
+            const jumpT = Math.min(Math.max((mult - 1) / 12, 0), 1); // 0 idle → 1 full jump
+            const chromatic = jumpT > 0.18 && fullTier;
+
+            // Fade previous frame — produces the motion-blur streak.
+            // During a jump the fade weakens so streaks stretch much longer.
+            ctx.globalAlpha = 1;
+            ctx.fillStyle = `rgba(10,10,10,${TRAIL_ALPHA * (1 - jumpT * 0.72)})`;
+            ctx.fillRect(0, 0, W, H);
 
             for (const s of starsRef.current) {
                 s.px = s.x;
                 s.py = s.y;
 
-                // Direction from centre
-                const dx = s.x - 0.5;
-                const dy = s.y - 0.5;
+                // Direction from the (moving) warp centre
+                const dx = s.x - c.x;
+                const dy = s.y - c.y;
                 const len = Math.sqrt(dx * dx + dy * dy) || 0.0001;
 
                 // Speed scales with depth — near-zero when distant, faster when close
-                const spd = BASE_SPEED * (0.08 + s.z * s.z * 2.2);
+                const spd = BASE_SPEED * (0.08 + s.z * s.z * 2.2) * mult;
                 s.x += (dx / len) * spd;
                 s.y += (dy / len) * spd;
-                s.z = Math.min(s.z + Z_INCREMENT, 1);
+                s.z = Math.min(s.z + Z_INCREMENT * mult, 1);
 
                 // Recycle off-screen stars
                 if (s.x < -0.02 || s.x > 1.02 || s.y < -0.02 || s.y > 1.02) {
-                    resetStar(s);
+                    resetStar(s, c.x, c.y);
                     continue;
                 }
 
-                // Visual properties keyed to depth
+                // Visual properties keyed to depth — faint (far) → cool white-cyan (close)
                 const t = s.z;                              // 0 = far, 1 = close
-                const brightness = Math.round(30 + t * 220);
-                const blue = Math.min(brightness + 45, 255);
-                const lw = 0.3 + t * t * 2.0;              // thin until very close
+                const cr = Math.round(30 + t * 190);        // → 220
+                const cg = Math.round(34 + t * 211);        // → 245
+                const cb = Math.round(38 + t * 217);        // → 255
+                const lw = (0.3 + t * t * 2.0) * (1 + jumpT * 0.8);
 
                 const x1 = s.px * W;
                 const y1 = s.py * H;
                 const x2 = s.x * W;
                 const y2 = s.y * H;
 
+                // Chromatic aberration during the jump — RGB-split ghost streaks
+                if (chromatic) {
+                    const off = 1.5 + jumpT * 2.5;
+                    ctx.globalAlpha = 0.5 * jumpT;
+                    ctx.beginPath();
+                    ctx.moveTo(x1 - off, y1);
+                    ctx.lineTo(x2 - off, y2);
+                    ctx.strokeStyle = `rgb(34,211,238)`;
+                    ctx.lineWidth = lw;
+                    ctx.stroke();
+                    ctx.beginPath();
+                    ctx.moveTo(x1 + off, y1);
+                    ctx.lineTo(x2 + off, y2);
+                    ctx.strokeStyle = `rgb(167,139,250)`;
+                    ctx.lineWidth = lw;
+                    ctx.stroke();
+                    ctx.globalAlpha = 1;
+                }
+
                 ctx.beginPath();
                 ctx.moveTo(x1, y1);
                 ctx.lineTo(x2, y2);
-                ctx.strokeStyle = `rgb(${brightness},${brightness + 8},${blue})`;
+                ctx.strokeStyle = `rgb(${cr},${cg},${cb})`;
                 ctx.lineWidth = lw;
                 ctx.stroke();
             }
@@ -155,6 +239,7 @@ const WarpBackground: React.FC<WarpBackgroundProps> = ({ active }) => {
 
     // Drive the fade based on active prop
     useEffect(() => {
+        activeRef.current = active;
         targetRef.current = active ? 1 : 0;
     }, [active]);
 
@@ -166,12 +251,15 @@ const WarpBackground: React.FC<WarpBackgroundProps> = ({ active }) => {
                 inset: 0,
                 width: '100vw',
                 height: '100vh',
-                zIndex: 0,
+                zIndex: 1,
                 pointerEvents: 'none',
                 display: 'block',
+                opacity: 0,
             }}
         />
     );
-};
+});
+
+WarpBackground.displayName = 'WarpBackground';
 
 export default WarpBackground;
