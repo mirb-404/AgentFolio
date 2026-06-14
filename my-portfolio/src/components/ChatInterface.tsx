@@ -896,15 +896,6 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, acti
             >
                 <div className="flex flex-col items-center text-center w-full max-w-[760px] mx-auto lg:-mt-[40px]">
 
-                    {/* Status badge */}
-                    <div data-hero-item className="flex items-center gap-2.5 bg-[#141414] border border-[#232323] rounded-full px-4 py-1.5">
-                        <span className="relative flex w-1.5 h-1.5">
-                            <span className="absolute inline-flex h-full w-full rounded-full bg-[#22d3ee] opacity-60 animate-status-ping" />
-                            <span className="relative inline-flex w-1.5 h-1.5 rounded-full bg-[#22d3ee]" />
-                        </span>
-                        <span className="text-[#8a8a85] text-[12px] font-mono tracking-wide">agent online</span>
-                    </div>
-
                     {/* Headline */}
                     <h2
                         ref={nameRef}
