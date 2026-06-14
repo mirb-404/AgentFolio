@@ -133,18 +133,18 @@ const BlogContent: React.FC<BlogContentProps> = ({
       // ── Headings ────────────────────────────────────────────────────────
       case 'heading': {
         if (block.level === 2) return (
-          <h2 key={idx} className="font-display text-[20px] sm:text-[24px] font-bold text-[#111] leading-tight tracking-tight mt-12 mb-4 pl-4 border-l-[3px] border-blue-500">
+          <h2 key={idx} className="font-display text-[20px] sm:text-[24px] font-medium text-[#111] leading-tight tracking-tight mt-12 mb-4 pl-4 border-l-[3px] border-blue-500">
             {block.text}
           </h2>
         );
         if (block.level === 3) return (
-          <h3 key={idx} className="font-display text-[17px] sm:text-[19px] font-bold text-[#222] leading-tight tracking-tight mt-9 mb-3 flex items-center gap-2.5">
+          <h3 key={idx} className="font-display text-[17px] sm:text-[19px] font-medium text-[#222] leading-tight tracking-tight mt-9 mb-3 flex items-center gap-2.5">
             <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
             {block.text}
           </h3>
         );
         return (
-          <h1 key={idx} className="font-display text-[24px] sm:text-[28px] font-bold text-[#111] leading-tight tracking-tight mt-12 mb-4">
+          <h1 key={idx} className="font-display text-[24px] sm:text-[28px] font-medium text-[#111] leading-tight tracking-tight mt-12 mb-4">
             {block.text}
           </h1>
         );
@@ -339,7 +339,7 @@ const BlogContent: React.FC<BlogContentProps> = ({
             </div>
 
             {/* Title */}
-            <h1 className="font-display text-[24px] sm:text-[32px] lg:text-[40px] font-bold text-[#111] leading-[1.15] tracking-tight mb-7 break-words">
+            <h1 className="font-display text-[24px] sm:text-[32px] lg:text-[40px] font-medium text-[#111] leading-[1.15] tracking-tight mb-7 break-words">
               {post.title}
             </h1>
 

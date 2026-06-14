@@ -114,13 +114,13 @@ const MagneticCursor: React.FC = () => {
             <div
                 ref={dotRef}
                 aria-hidden
-                className="fixed top-0 left-0 w-[6px] h-[6px] rounded-full bg-white pointer-events-none z-[10001]"
+                className="fixed top-0 left-0 w-[6px] h-[6px] rounded-full bg-white pointer-events-none z-[10001] mix-blend-difference"
             />
             <div
                 ref={ringRef}
                 aria-hidden
-                className="fixed top-0 left-0 w-[34px] h-[34px] rounded-full border border-blue-400/50 pointer-events-none z-[10000]"
-                style={{ boxShadow: '0 0 18px rgba(59,130,246,0.12) inset' }}
+                className="fixed top-0 left-0 w-[34px] h-[34px] rounded-full border border-[#22d3ee]/50 pointer-events-none z-[10000]"
+                style={{ boxShadow: '0 0 18px rgba(34,211,238,0.14) inset' }}
             />
         </>
     );

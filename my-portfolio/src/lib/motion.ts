@@ -2,9 +2,10 @@ import gsap from 'gsap';
 import { SplitText } from 'gsap/SplitText';
 import { Physics2DPlugin } from 'gsap/Physics2DPlugin';
 import { ScrambleTextPlugin } from 'gsap/ScrambleTextPlugin';
+import { DrawSVGPlugin } from 'gsap/DrawSVGPlugin';
 import { CustomEase } from 'gsap/CustomEase';
 
-gsap.registerPlugin(SplitText, Physics2DPlugin, ScrambleTextPlugin, CustomEase);
+gsap.registerPlugin(SplitText, Physics2DPlugin, ScrambleTextPlugin, DrawSVGPlugin, CustomEase);
 
 // Signature eases shared across the app
 CustomEase.create('agentOut', 'M0,0 C0.22,1.04 0.36,1 1,1');     // slight overshoot settle
@@ -38,7 +39,7 @@ export function burstAt(x: number, y: number, opts?: { count?: number; colors?: 
     if (tier === 'off') return;
 
     const count = opts?.count ?? (tier === 'lite' ? 6 : 16);
-    const colors = opts?.colors ?? ['#60a5fa', '#22d3ee', '#ffffff', '#3b82f6'];
+    const colors = opts?.colors ?? ['#22d3ee', '#67e8f9', '#f2f1ec', '#0ea5e9'];
 
     const frag = document.createDocumentFragment();
     const dots: HTMLSpanElement[] = [];

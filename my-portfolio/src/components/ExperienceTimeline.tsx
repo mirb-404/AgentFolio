@@ -16,7 +16,7 @@ const ExperienceCard: React.FC<{ exp: Experience }> = ({ exp }) => {
     const displayedBullets = isExpanded ? bullets : bullets.slice(0, 2);
 
     return (
-        <div className="group bg-[#0d0d0d] border border-[#191919] rounded-2xl p-5 hover:bg-[#111] hover:border-[#222] transition-all duration-200">
+        <div className="group bg-[#0f0f0f] border border-[#1f1f1f] rounded-2xl p-5 hover:bg-[#141414] hover:border-[#2a2a2a] transition-all duration-200">
 
             {/* Header */}
             <div className="flex items-start gap-3 mb-4">
@@ -38,7 +38,7 @@ const ExperienceCard: React.FC<{ exp: Experience }> = ({ exp }) => {
 
                 {/* Role + meta */}
                 <div className="flex-1 min-w-0">
-                    <h3 className="text-[15px] font-bold text-white group-hover:text-blue-300 transition-colors duration-200 leading-snug">
+                    <h3 className="text-[15px] font-bold text-white group-hover:text-[#67e8f9] transition-colors duration-200 leading-snug">
                         {exp.role}
                     </h3>
                     <div className="flex flex-wrap items-center gap-2 mt-1.5">
@@ -55,7 +55,7 @@ const ExperienceCard: React.FC<{ exp: Experience }> = ({ exp }) => {
             <ul className="space-y-2">
                 {displayedBullets.map((point, idx) => (
                     <li key={idx} className="flex gap-2.5 items-start">
-                        <span className="mt-[7px] w-1 h-1 rounded-full bg-blue-500/40 shrink-0" />
+                        <span className="mt-[7px] w-1 h-1 rounded-full bg-[#22d3ee]/50 shrink-0" />
                         <span className="text-sm text-[#787878] leading-relaxed">{point}</span>
                     </li>
                 ))}
@@ -64,7 +64,7 @@ const ExperienceCard: React.FC<{ exp: Experience }> = ({ exp }) => {
             {hasMore && (
                 <button
                     onClick={() => setIsExpanded(!isExpanded)}
-                    className="mt-3.5 flex items-center gap-1.5 text-[11px] font-mono text-[#505050] hover:text-blue-400/80 transition-colors px-2 py-1 -ml-2 rounded-lg hover:bg-[#141414]"
+                    className="mt-3.5 flex items-center gap-1.5 text-[11px] font-mono text-[#555550] hover:text-[#67e8f9] transition-colors px-2 py-1 -ml-2 rounded-lg hover:bg-[#1a1a1a]"
                 >
                     <svg
                         className={`w-3 h-3 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
@@ -103,10 +103,10 @@ const ExperienceTimeline: React.FC<ExperienceTimelineProps> = ({ experiences }) 
                     {/* Timeline rail — dot + connecting line */}
                     <div className="flex flex-col items-center shrink-0 w-5">
                         {/* Dot aligned with card header */}
-                        <div className="mt-[22px] w-2.5 h-2.5 rounded-full bg-[#080808] border-2 border-[#303030] shrink-0 z-10" />
+                        <div className="mt-[22px] w-2.5 h-2.5 rounded-full bg-[#0a0a0a] border-2 border-[#22d3ee]/50 shrink-0 z-10 shadow-[0_0_8px_rgba(34,211,238,0.25)]" />
                         {/* Vertical line to next card (omit after last) */}
                         {i < experiences.length - 1 && (
-                            <div className="w-px flex-1 mt-2 bg-[#191919]" />
+                            <div className="w-px flex-1 mt-2 bg-gradient-to-b from-[#22d3ee]/25 to-[#1f1f1f]" />
                         )}
                     </div>
 

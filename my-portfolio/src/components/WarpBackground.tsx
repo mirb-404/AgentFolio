@@ -48,16 +48,20 @@ const WarpBackground = forwardRef<WarpHandle, WarpBackgroundProps>(({ active }, 
     const centerTargetRef = useRef({ x: 0.5, y: 0.5 });
     // 1 = idle drift; tweened up hard during a jump
     const speedRef = useRef({ mult: 1 });
+    const activeRef = useRef(false);
+    const clearedRef = useRef(true);
 
     useImperativeHandle(ref, () => ({
         jump: () => {
             const tier = motionTier();
             if (tier === 'off') return;
             const peak = tier === 'lite' ? 10 : 22;
-            // Force visible for the jump even if a fade-out already started
+            // Force visible for the jump even if the layer is normally hidden
             targetRef.current = 1;
-            opacityRef.current = Math.max(opacityRef.current, 0.65);
-            gsap.timeline()
+            opacityRef.current = Math.max(opacityRef.current, 0.85);
+            gsap.timeline({
+                onComplete: () => { targetRef.current = activeRef.current ? 1 : 0; },
+            })
                 .to(speedRef.current, { mult: peak, duration: 0.7, ease: 'power3.in' })
                 .to(speedRef.current, { mult: 1, duration: 1.1, ease: 'power2.out' }, '+=0.25');
         },
@@ -114,11 +118,21 @@ const WarpBackground = forwardRef<WarpHandle, WarpBackgroundProps>(({ active }, 
                 opacityRef.current = targetRef.current;
             }
 
-            // Nothing to draw while fully faded out
-            if (opacityRef.current < 0.004) return;
+            // Visibility lives on the element so the layer can sit above the video
+            canvas.style.opacity = String(opacityRef.current);
 
             const ctx = canvas.getContext('2d');
             if (!ctx) return;
+
+            // Fully faded: wipe accumulated trails once so the canvas goes transparent
+            if (opacityRef.current < 0.004) {
+                if (!clearedRef.current) {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    clearedRef.current = true;
+                }
+                return;
+            }
+            clearedRef.current = false;
 
             const W = canvas.width;
             const H = canvas.height;
@@ -136,10 +150,8 @@ const WarpBackground = forwardRef<WarpHandle, WarpBackgroundProps>(({ active }, 
             // Fade previous frame — produces the motion-blur streak.
             // During a jump the fade weakens so streaks stretch much longer.
             ctx.globalAlpha = 1;
-            ctx.fillStyle = `rgba(8,8,8,${TRAIL_ALPHA * (1 - jumpT * 0.72)})`;
+            ctx.fillStyle = `rgba(10,10,10,${TRAIL_ALPHA * (1 - jumpT * 0.72)})`;
             ctx.fillRect(0, 0, W, H);
-
-            ctx.globalAlpha = opacityRef.current;
 
             for (const s of starsRef.current) {
                 s.px = s.x;
@@ -162,10 +174,11 @@ const WarpBackground = forwardRef<WarpHandle, WarpBackgroundProps>(({ active }, 
                     continue;
                 }
 
-                // Visual properties keyed to depth
+                // Visual properties keyed to depth — faint (far) → cool white-cyan (close)
                 const t = s.z;                              // 0 = far, 1 = close
-                const brightness = Math.round(30 + t * 220);
-                const blue = Math.min(brightness + 45, 255);
+                const cr = Math.round(30 + t * 190);        // → 220
+                const cg = Math.round(34 + t * 211);        // → 245
+                const cb = Math.round(38 + t * 217);        // → 255
                 const lw = (0.3 + t * t * 2.0) * (1 + jumpT * 0.8);
 
                 const x1 = s.px * W;
@@ -176,26 +189,26 @@ const WarpBackground = forwardRef<WarpHandle, WarpBackgroundProps>(({ active }, 
                 // Chromatic aberration during the jump — RGB-split ghost streaks
                 if (chromatic) {
                     const off = 1.5 + jumpT * 2.5;
-                    ctx.globalAlpha = opacityRef.current * 0.5 * jumpT;
+                    ctx.globalAlpha = 0.5 * jumpT;
                     ctx.beginPath();
                     ctx.moveTo(x1 - off, y1);
                     ctx.lineTo(x2 - off, y2);
-                    ctx.strokeStyle = `rgb(255,60,80)`;
+                    ctx.strokeStyle = `rgb(34,211,238)`;
                     ctx.lineWidth = lw;
                     ctx.stroke();
                     ctx.beginPath();
                     ctx.moveTo(x1 + off, y1);
                     ctx.lineTo(x2 + off, y2);
-                    ctx.strokeStyle = `rgb(40,200,255)`;
+                    ctx.strokeStyle = `rgb(167,139,250)`;
                     ctx.lineWidth = lw;
                     ctx.stroke();
-                    ctx.globalAlpha = opacityRef.current;
+                    ctx.globalAlpha = 1;
                 }
 
                 ctx.beginPath();
                 ctx.moveTo(x1, y1);
                 ctx.lineTo(x2, y2);
-                ctx.strokeStyle = `rgb(${brightness},${brightness + 8},${blue})`;
+                ctx.strokeStyle = `rgb(${cr},${cg},${cb})`;
                 ctx.lineWidth = lw;
                 ctx.stroke();
             }
@@ -226,6 +239,7 @@ const WarpBackground = forwardRef<WarpHandle, WarpBackgroundProps>(({ active }, 
 
     // Drive the fade based on active prop
     useEffect(() => {
+        activeRef.current = active;
         targetRef.current = active ? 1 : 0;
     }, [active]);
 
@@ -237,9 +251,10 @@ const WarpBackground = forwardRef<WarpHandle, WarpBackgroundProps>(({ active }, 
                 inset: 0,
                 width: '100vw',
                 height: '100vh',
-                zIndex: 0,
+                zIndex: 1,
                 pointerEvents: 'none',
                 display: 'block',
+                opacity: 0,
             }}
         />
     );

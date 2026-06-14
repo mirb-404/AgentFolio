@@ -1,88 +1,123 @@
 import React, { useEffect, useRef } from 'react';
-import gsap from 'gsap';
-import heroIcon from '../assets/05-pill-tag-hero.svg';
+import { gsap } from '../lib/motion';
 
 interface SplashScreenProps {
     onComplete: () => void;
 }
 
+/**
+ * Fable-style preloader: micro meta labels, a giant eased percentage and a
+ * hairline progress bar; the whole screen lifts away when the count lands.
+ * Progress tracks font loading with a time-based ramp underneath so it can
+ * never stall.
+ */
 const SplashScreen: React.FC<SplashScreenProps> = ({ onComplete }) => {
-    const rootRef    = useRef<HTMLDivElement>(null);
-    const iconRef    = useRef<HTMLDivElement>(null);
-    const wordRef    = useRef<HTMLSpanElement>(null);
-    const subRef     = useRef<HTMLDivElement>(null);
+    const rootRef = useRef<HTMLDivElement>(null);
+    const countWrapRef = useRef<HTMLDivElement>(null);
+    const countRef = useRef<HTMLDivElement>(null);
+    const barRef = useRef<HTMLSpanElement>(null);
+    const metaRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         if (window.innerWidth < 768) { onComplete(); return; }
 
-        const ctx = gsap.context(() => {
-            const tl = gsap.timeline({ defaults: { ease: 'power3.out' } });
+        let raf = 0;
+        let displayed = 0;
+        let fontsReady = false;
+        let done = false;
+        const start = performance.now();
 
-            tl
-                .fromTo(iconRef.current,
-                    { opacity: 0, scale: 0.78, y: 10 },
-                    { opacity: 1, scale: 1,    y: 0,  duration: 0.5 })
-                .fromTo(wordRef.current,
-                    { opacity: 0, x: -16, filter: 'blur(6px)' },
-                    { opacity: 1, x: 0,   filter: 'blur(0px)', duration: 0.42 },
-                    '-=0.28')
-                .fromTo(subRef.current,
-                    { opacity: 0, y: 8 },
-                    { opacity: 1, y: 0, duration: 0.35, ease: 'power2.out' },
-                    '-=0.1')
-                // hold
-                .to({}, { duration: 0.75 })
-                // exit — whole screen fades fast
-                .to(rootRef.current, {
-                    opacity: 0,
-                    duration: 0.28,
-                    ease: 'power2.in',
-                    onComplete,
-                });
-        }, rootRef);
+        // preload the exact faces the hero uses so SplitText measures real
+        // metrics — otherwise the headline visibly re-flows mid-animation
+        const faces = [
+            '400 1rem "Clash Display"',
+            '500 1rem "Clash Display"',
+            '400 1rem Satoshi',
+            '500 1rem Satoshi',
+            '700 1rem Satoshi',
+        ];
+        Promise.all([document.fonts.ready, ...faces.map((f) => document.fonts.load(f))])
+            .catch(() => { /* missing face — proceed anyway */ })
+            .finally(() => { fontsReady = true; });
+        // safety: never hold the door past 4s
+        const safety = setTimeout(() => { fontsReady = true; }, 4000);
 
-        return () => ctx.revert();
+        // meta + count fade in quietly
+        const enter = gsap.timeline({ defaults: { ease: 'power2.out' } });
+        enter
+            .fromTo(metaRef.current, { opacity: 0, y: -8 }, { opacity: 1, y: 0, duration: 0.5 }, 0.1)
+            .fromTo(countWrapRef.current, { opacity: 0 }, { opacity: 1, duration: 0.6 }, 0.15);
+
+        const finish = () => {
+            if (done) return;
+            done = true;
+            gsap.to(rootRef.current, {
+                yPercent: -100,
+                duration: 1.0,
+                ease: 'power4.inOut',
+                delay: 0.15,
+                onComplete,
+            });
+        };
+
+        const tick = () => {
+            if (done) return;
+            raf = requestAnimationFrame(tick);
+
+            // time ramp carries progress; the last stretch waits for fonts
+            const elapsed = (performance.now() - start) / 1000;
+            const target = Math.min(elapsed / 1.4, fontsReady ? 1 : 0.92);
+
+            // eased count — never snaps, sample-style
+            displayed += (target * 100 - displayed) * 0.08;
+            if (target >= 1 && displayed > 99.2) displayed = 100;
+
+            if (countRef.current) countRef.current.textContent = String(Math.round(displayed));
+            if (barRef.current) barRef.current.style.transform = `scaleX(${displayed / 100})`;
+
+            if (displayed >= 100) finish();
+        };
+        tick();
+
+        return () => {
+            cancelAnimationFrame(raf);
+            clearTimeout(safety);
+            enter.kill();
+        };
     }, [onComplete]);
 
     return (
         <div
             ref={rootRef}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-[#080808]"
+            className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-10 bg-[#0a0a0a]"
             style={{ pointerEvents: 'none' }}
+            role="status"
+            aria-label="Loading"
         >
-            <div className="flex flex-col items-center gap-6">
+            {/* meta labels */}
+            <div ref={metaRef} className="flex gap-8 text-[11px] font-mono uppercase tracking-[0.22em] text-[#555550] opacity-0">
+                <span>mirang bhandari</span>
+                <span>agentfolio — {new Date().getFullYear()}</span>
+            </div>
 
-                {/* Icon + wordmark */}
-                <div className="flex items-center gap-5">
-
-                    {/* Icon with ambient teal glow */}
-                    <div ref={iconRef} className="relative opacity-0">
-                        <div className="absolute inset-0 rounded-2xl bg-[#00c8c8]/15 blur-2xl scale-125 pointer-events-none" />
-                        <img
-                            src={heroIcon}
-                            alt="AF"
-                            className="relative h-14 sm:h-16 md:h-[72px] w-auto"
-                        />
-                    </div>
-
-                    {/* Wordmark */}
-                    <span
-                        ref={wordRef}
-                        className="text-[42px] sm:text-5xl md:text-6xl font-bold text-white font-sans tracking-tight leading-none opacity-0"
-                    >
-                        AgentFolio
-                    </span>
+            {/* giant eased count */}
+            <div ref={countWrapRef} className="flex items-start text-[#f2f1ec] opacity-0">
+                <div
+                    ref={countRef}
+                    className="font-fustat font-normal text-[clamp(6rem,18vw,13rem)] leading-[0.9] tracking-[-0.04em]"
+                >
+                    0
                 </div>
+                <span className="mt-6 text-[clamp(1.4rem,4vw,3rem)] font-fustat text-[#555550]">%</span>
+            </div>
 
-                {/* Subtitle with flanking lines */}
-                <div ref={subRef} className="flex items-center gap-3 opacity-0">
-                    <div className="w-8 h-px bg-[#242424]" />
-                    <p className="text-[11px] sm:text-[12px] text-[#383838] font-sans font-medium tracking-[0.28em] uppercase">
-                        An Agentic Portfolio
-                    </p>
-                    <div className="w-8 h-px bg-[#242424]" />
-                </div>
-
+            {/* hairline progress bar */}
+            <div className="w-[min(42vw,320px)] h-px bg-white/10 overflow-hidden">
+                <span
+                    ref={barRef}
+                    className="block h-full w-full bg-[#f2f1ec] origin-left"
+                    style={{ transform: 'scaleX(0)' }}
+                />
             </div>
         </div>
     );
