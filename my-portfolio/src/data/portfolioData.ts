@@ -261,7 +261,7 @@ I'm also an avid Agentic Ai Researcher who is actively building industry grade a
         }
     ],
     // --- Resume & Fun Facts ---
-    resumeUrl: "https://drive.google.com/uc?export=download&id=1O1gHNy-x1mqAPaDa1z3PfMlCISGsqL7P",
+    resumeUrl: "https://drive.google.com/uc?export=download&id=1u0YYQcJVuYh61NKanT9ZLp6hloNbgCQF",
 
     funFacts: [
         "I once debugged code in my sleep.",
