@@ -241,11 +241,6 @@ registry/main.py  --->  aggregates gateways, serves marketplace UI`
       {
         type: 'paragraph',
         text: 'Also, a smaller lesson that keeps repeating for me in hackathons: the security work was the part that made the demo credible. Anyone can show a payment succeeding. Being able to answer *"what stops me from just bypassing your gateway?"* on stage is what turns a demo into a product argument.'
-      },
-      {
-        type: 'quote',
-        text: 'We spent a decade building payment infrastructure for humans clicking buttons. Agents do not click buttons, and they transact in fractions of a cent. That is not a smaller version of the same problem, it is a different one, and it needs different rails.',
-        author: 'Mirang Bhandari'
       }
     ]
   },

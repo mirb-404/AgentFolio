@@ -102,7 +102,7 @@ I'm also an avid Agentic Ai Researcher who is actively building industry grade a
     experience: [
         {
             id: "exp0",
-            role: "AI/ML Engineer (Project Partner)",
+            role: "AI/ML Engineer (Research Partner)",
             company: "Deutsche Bank",
             period: "2026 Apr - Present",
             description: "Benchmarking agentic AI and LLM-based NLP workflows using Knowledge Graphs to measure reliability and non-deterministic behaviour across production-grade pipelines.\nBuilding end-to-end RAG pipelines and LLM orchestration systems with LangChain and LangGraph, prototyping rapidly in an Agile/Scrum environment with iterative sprint cycles.\nComparing RAG against GraphRAG to quantify token usage and hallucination rates in financial NLP workflows.",
