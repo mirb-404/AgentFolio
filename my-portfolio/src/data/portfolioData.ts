@@ -5,6 +5,7 @@ import mlopsImg from '../assets/Mlflow.avif';
 import keysightLogo from '../assets/kt.jpg';
 import resoluteLogo from '../assets/rai.jpg';
 import githubLogo from '../assets/gh.jpg';
+import deutscheBankLogo from '../assets/deutsche-bank.svg';
 const meImg = "/me.webp";
 import wassertumimg from '../assets/wassertum.jpg'
 import travelimg from '../assets/travel.avif'
@@ -57,7 +58,7 @@ export const portfolioData = {
 
     // --- Hero Stats (edit these freely) ---
     heroStats: [
-        { value: '2', label: 'Companies' },
+        { value: '3', label: 'Companies' },
         { value: '6+', label: 'Projects' },
         { value: 'Mannheim', label: 'Location' },
     ],
@@ -93,12 +94,20 @@ I'm also an avid Agentic Ai Researcher who is actively building industry grade a
         {
             title: "Agentic AI",
             icon: "tool",
-            skills: ["LangGraph", "LangChain", "Ollama", "n8n"]
+            skills: ["LangGraph", "LangChain", "Ollama", "n8n", "MCP", "A2A", "RAG / GraphRAG", "Knowledge Graphs"]
         }
     ],
 
     // --- Work Experience ---
     experience: [
+        {
+            id: "exp0",
+            role: "AI/ML Engineer (Project Partner)",
+            company: "Deutsche Bank",
+            period: "2026 Apr - Present",
+            description: "Benchmarking agentic AI and LLM-based NLP workflows using Knowledge Graphs to measure reliability and non-deterministic behaviour across production-grade pipelines.\nBuilding end-to-end RAG pipelines and LLM orchestration systems with LangChain and LangGraph, prototyping rapidly in an Agile/Scrum environment with iterative sprint cycles.\nComparing RAG against GraphRAG to quantify token usage and hallucination rates in financial NLP workflows.",
+            logo: deutscheBankLogo
+        },
         {
             id: "exp1",
             role: "AI & Full Stack Engineer",
@@ -261,7 +270,7 @@ I'm also an avid Agentic Ai Researcher who is actively building industry grade a
         }
     ],
     // --- Resume & Fun Facts ---
-    resumeUrl: "https://drive.google.com/uc?export=download&id=1u0YYQcJVuYh61NKanT9ZLp6hloNbgCQF",
+    resumeUrl: "https://drive.google.com/uc?export=download&id=1dYFu-Es-6oBQ4KWwp_wcgSgRB2XPCrdp",
 
     funFacts: [
         "I once debugged code in my sleep.",
