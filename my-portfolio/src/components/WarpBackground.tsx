@@ -1,5 +1,5 @@
-import { useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
-import { gsap, motionTier, hasFinePointer } from '../lib/motion';
+import { useCallback, useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
+import { gsap, motionTier, hasFinePointer, isHidden } from '../lib/motion';
 
 interface WarpBackgroundProps {
     active: boolean;
@@ -22,9 +22,12 @@ interface Star {
 const BASE_SPEED = 0.0028;       // very gentle drift
 const Z_INCREMENT = 0.0022;      // how fast stars "approach"
 const TRAIL_ALPHA = 0.10;        // lower = longer trails (slower fade)
-const FADE_LERP = 0.018;         // opacity transition speed (~1.8s to fully fade)
+const FADE_LERP = 0.055;         // opacity transition speed (~1s to fully fade)
 const PARALLAX = 0.07;           // how far the warp centre drifts toward the cursor
 const CENTER_LERP = 0.04;        // smoothing for centre movement
+// Stars are batched into depth bands: one stroke() per band instead of one per
+// star turns ~450 canvas draw calls a frame into 8.
+const DEPTH_BANDS = 8;
 
 function resetStar(star: Star, cx: number, cy: number) {
     // Spawn from a tight cluster at the warp centre
@@ -50,6 +53,17 @@ const WarpBackground = forwardRef<WarpHandle, WarpBackgroundProps>(({ active }, 
     const speedRef = useRef({ mult: 1 });
     const activeRef = useRef(false);
     const clearedRef = useRef(true);
+    // Loop lifecycle — the rAF only spins while there is something to show
+    const aliveRef = useRef(false);
+    const runningRef = useRef(false);
+    const loopRef = useRef<(() => void) | null>(null);
+    const lastOpacityRef = useRef(-1);
+
+    const startLoop = useCallback(() => {
+        if (runningRef.current || !aliveRef.current || !loopRef.current) return;
+        runningRef.current = true;
+        rafRef.current = requestAnimationFrame(loopRef.current);
+    }, []);
 
     useImperativeHandle(ref, () => ({
         jump: () => {
@@ -59,13 +73,14 @@ const WarpBackground = forwardRef<WarpHandle, WarpBackgroundProps>(({ active }, 
             // Force visible for the jump even if the layer is normally hidden
             targetRef.current = 1;
             opacityRef.current = Math.max(opacityRef.current, 0.85);
+            startLoop();
             gsap.timeline({
                 onComplete: () => { targetRef.current = activeRef.current ? 1 : 0; },
             })
                 .to(speedRef.current, { mult: peak, duration: 0.7, ease: 'power3.in' })
                 .to(speedRef.current, { mult: 1, duration: 1.1, ease: 'power2.out' }, '+=0.25');
         },
-    }), []);
+    }), [startLoop]);
 
     // Initialise stars spread across all depths so the canvas isn't empty on mount
     useEffect(() => {
@@ -99,16 +114,27 @@ const WarpBackground = forwardRef<WarpHandle, WarpBackgroundProps>(({ active }, 
         return () => window.removeEventListener('mousemove', onMove);
     }, []);
 
-    // Main animation loop
+    // Main animation loop.
+    // The loop parks itself once the layer has fully faded out and is woken by
+    // jump() / the `active` prop — previously it kept drawing every frame for
+    // the entire life of the page, invisible or not.
     useEffect(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
-        let alive = true;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
         const fullTier = motionTier() === 'full';
 
+        const bands: Path2D[] = new Array(DEPTH_BANDS);
+
         const loop = () => {
-            if (!alive) return;
-            rafRef.current = requestAnimationFrame(loop);
+            if (!aliveRef.current) return;
+
+            if (isHidden()) {
+                rafRef.current = requestAnimationFrame(loop);
+                return;
+            }
 
             // Smoothly lerp canvas opacity toward target
             const diff = targetRef.current - opacityRef.current;
@@ -118,21 +144,28 @@ const WarpBackground = forwardRef<WarpHandle, WarpBackgroundProps>(({ active }, 
                 opacityRef.current = targetRef.current;
             }
 
-            // Visibility lives on the element so the layer can sit above the video
-            canvas.style.opacity = String(opacityRef.current);
+            // Visibility lives on the element so the layer can sit above the video.
+            // Only touch style when it actually moved — every write is a mutation
+            // the compositor has to look at.
+            const opa = Math.round(opacityRef.current * 1000) / 1000;
+            if (opa !== lastOpacityRef.current) {
+                canvas.style.opacity = String(opa);
+                lastOpacityRef.current = opa;
+            }
 
-            const ctx = canvas.getContext('2d');
-            if (!ctx) return;
-
-            // Fully faded: wipe accumulated trails once so the canvas goes transparent
-            if (opacityRef.current < 0.004) {
+            // Fully faded: wipe accumulated trails once, then stop the loop
+            // entirely until something asks for the warp again.
+            if (opacityRef.current < 0.004 && targetRef.current < 0.004) {
                 if (!clearedRef.current) {
                     ctx.clearRect(0, 0, canvas.width, canvas.height);
                     clearedRef.current = true;
                 }
+                runningRef.current = false;
                 return;
             }
             clearedRef.current = false;
+
+            rafRef.current = requestAnimationFrame(loop);
 
             const W = canvas.width;
             const H = canvas.height;
@@ -146,12 +179,20 @@ const WarpBackground = forwardRef<WarpHandle, WarpBackgroundProps>(({ active }, 
             const mult = speedRef.current.mult;
             const jumpT = Math.min(Math.max((mult - 1) / 12, 0), 1); // 0 idle → 1 full jump
             const chromatic = jumpT > 0.18 && fullTier;
+            const ghostOff = 1.5 + jumpT * 2.5;
 
             // Fade previous frame — produces the motion-blur streak.
             // During a jump the fade weakens so streaks stretch much longer.
             ctx.globalAlpha = 1;
             ctx.fillStyle = `rgba(10,10,10,${TRAIL_ALPHA * (1 - jumpT * 0.72)})`;
             ctx.fillRect(0, 0, W, H);
+
+            // Path2D has no reset, so the batches are rebuilt each frame —
+            // a dozen small allocations against hundreds of draw calls saved.
+            for (let b = 0; b < DEPTH_BANDS; b++) bands[b] = new Path2D();
+            const cyan = new Path2D();
+            const violet = new Path2D();
+            let hasGhosts = false;
 
             for (const s of starsRef.current) {
                 s.px = s.x;
@@ -174,51 +215,60 @@ const WarpBackground = forwardRef<WarpHandle, WarpBackgroundProps>(({ active }, 
                     continue;
                 }
 
-                // Visual properties keyed to depth — faint (far) → cool white-cyan (close)
-                const t = s.z;                              // 0 = far, 1 = close
-                const cr = Math.round(30 + t * 190);        // → 220
-                const cg = Math.round(34 + t * 211);        // → 245
-                const cb = Math.round(38 + t * 217);        // → 255
-                const lw = (0.3 + t * t * 2.0) * (1 + jumpT * 0.8);
-
                 const x1 = s.px * W;
                 const y1 = s.py * H;
                 const x2 = s.x * W;
                 const y2 = s.y * H;
 
+                // Depth decides both colour and width, so one band index covers both
+                const band = Math.min(DEPTH_BANDS - 1, (s.z * DEPTH_BANDS) | 0);
+                const p = bands[band];
+                p.moveTo(x1, y1);
+                p.lineTo(x2, y2);
+
                 // Chromatic aberration during the jump — RGB-split ghost streaks
                 if (chromatic) {
-                    const off = 1.5 + jumpT * 2.5;
-                    ctx.globalAlpha = 0.5 * jumpT;
-                    ctx.beginPath();
-                    ctx.moveTo(x1 - off, y1);
-                    ctx.lineTo(x2 - off, y2);
-                    ctx.strokeStyle = `rgb(34,211,238)`;
-                    ctx.lineWidth = lw;
-                    ctx.stroke();
-                    ctx.beginPath();
-                    ctx.moveTo(x1 + off, y1);
-                    ctx.lineTo(x2 + off, y2);
-                    ctx.strokeStyle = `rgb(167,139,250)`;
-                    ctx.lineWidth = lw;
-                    ctx.stroke();
-                    ctx.globalAlpha = 1;
+                    hasGhosts = true;
+                    cyan.moveTo(x1 - ghostOff, y1);
+                    cyan.lineTo(x2 - ghostOff, y2);
+                    violet.moveTo(x1 + ghostOff, y1);
+                    violet.lineTo(x2 + ghostOff, y2);
                 }
+            }
 
-                ctx.beginPath();
-                ctx.moveTo(x1, y1);
-                ctx.lineTo(x2, y2);
+            if (hasGhosts) {
+                ctx.globalAlpha = 0.5 * jumpT;
+                ctx.lineWidth = (0.8 + jumpT * 1.4);
+                ctx.strokeStyle = 'rgb(34,211,238)';
+                ctx.stroke(cyan);
+                ctx.strokeStyle = 'rgb(167,139,250)';
+                ctx.stroke(violet);
+                ctx.globalAlpha = 1;
+            }
+
+            for (let b = 0; b < DEPTH_BANDS; b++) {
+                // Band centre stands in for every star in it — visually identical
+                // at these sizes, one stroke instead of dozens.
+                const t = (b + 0.5) / DEPTH_BANDS;
+                const cr = Math.round(30 + t * 190);
+                const cg = Math.round(34 + t * 211);
+                const cb = Math.round(38 + t * 217);
                 ctx.strokeStyle = `rgb(${cr},${cg},${cb})`;
-                ctx.lineWidth = lw;
-                ctx.stroke();
+                ctx.lineWidth = (0.3 + t * t * 2.0) * (1 + jumpT * 0.8);
+                ctx.stroke(bands[b]);
             }
 
             ctx.globalAlpha = 1;
         };
 
-        loop();
+        loopRef.current = loop;
+        aliveRef.current = true;
+        // Nothing is visible on mount; the first jump() or active=true starts it.
+        if (targetRef.current > 0) startLoop();
+
         return () => {
-            alive = false;
+            aliveRef.current = false;
+            runningRef.current = false;
             cancelAnimationFrame(rafRef.current);
         };
     }, []);
@@ -241,7 +291,16 @@ const WarpBackground = forwardRef<WarpHandle, WarpBackgroundProps>(({ active }, 
     useEffect(() => {
         activeRef.current = active;
         targetRef.current = active ? 1 : 0;
-    }, [active]);
+        // Fading out still needs frames to run; fading in obviously does
+        startLoop();
+    }, [active, startLoop]);
+
+    // A backgrounded tab parks the loop mid-fade — resume when it comes back
+    useEffect(() => {
+        const onVisible = () => { if (!document.hidden) startLoop(); };
+        document.addEventListener('visibilitychange', onVisible);
+        return () => document.removeEventListener('visibilitychange', onVisible);
+    }, [startLoop]);
 
     return (
         <canvas

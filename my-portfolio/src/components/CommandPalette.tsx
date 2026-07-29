@@ -63,8 +63,13 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ variant = 'inline', aut
     const panel = (
         <div
             ref={panelRef}
-            className="relative w-full max-w-[560px] rounded-2xl bg-[#121212]/95 backdrop-blur-xl border border-[#262626] overflow-hidden text-left
-                       shadow-[0_24px_64px_rgba(0,0,0,0.6),0_0_0_1px_rgba(34,211,238,0.05)]"
+            /* The inline variant deliberately drops backdrop-blur: it sits on top of
+               the animated shine ring and the WebGL field, so the browser would
+               re-blur its whole backdrop every frame — for 5% of visible tint. */
+            className={`relative w-full max-w-[560px] rounded-2xl border border-[#262626] overflow-hidden text-left
+                       shadow-[0_24px_64px_rgba(0,0,0,0.6),0_0_0_1px_rgba(34,211,238,0.05)] ${
+                           variant === 'overlay' ? 'bg-[#121212]/95 backdrop-blur-xl' : 'bg-[#121212]'
+                       }`}
         >
             {/* Accent hairline glow along the top edge */}
             <div className="absolute top-0 left-8 right-8 h-px bg-gradient-to-r from-transparent via-[#22d3ee]/60 to-transparent" />
@@ -146,4 +151,4 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ variant = 'inline', aut
     );
 };
 
-export default CommandPalette;
+export default React.memo(CommandPalette);

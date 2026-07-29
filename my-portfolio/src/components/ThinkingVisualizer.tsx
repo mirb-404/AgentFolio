@@ -1,4 +1,11 @@
 import React, { useEffect, useRef } from 'react';
+import { motionTier, isHidden } from '../lib/motion';
+
+const WIDTH = 128;
+const HEIGHT = 32;
+// The strip is 128px wide; sampling the curve every 4px is indistinguishable
+// from every 1px and quarters the path work.
+const STEP = 4;
 
 const ThinkingVisualizer: React.FC = () => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -10,69 +17,69 @@ const ThinkingVisualizer: React.FC = () => {
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
 
-        // Set dimensions (small strip)
-        const dpr = window.devicePixelRatio || 1;
-        const rect = canvas.getBoundingClientRect();
-
-        canvas.width = rect.width * dpr;
-        canvas.height = rect.height * dpr;
+        // Cap DPR — this is a 128×32 decorative strip, not artwork
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        canvas.width = WIDTH * dpr;
+        canvas.height = HEIGHT * dpr;
         ctx.scale(dpr, dpr);
+        ctx.lineWidth = 1.5;
+
+        const tier = motionTier();
+        const waves = tier === 'full' ? 3 : 2;
+        const frequency = 0.05;
 
         let time = 0;
-        let animationId: number;
+        let animationId = 0;
 
-        const draw = () => {
-            const width = rect.width;
-            const height = rect.height;
+        const paint = () => {
+            ctx.clearRect(0, 0, WIDTH, HEIGHT);
 
-            ctx.clearRect(0, 0, width, height);
+            // One gradient per frame, shared by every wave — it only varies with
+            // time, not with the wave index.
+            const gradient = ctx.createLinearGradient(0, 0, WIDTH, 0);
+            gradient.addColorStop(0, 'rgba(34, 211, 238, 0)');
+            gradient.addColorStop(0.5, `rgba(34, 211, 238, ${0.45 + Math.sin(time) * 0.25})`);
+            gradient.addColorStop(1, 'rgba(34, 211, 238, 0)');
+            ctx.strokeStyle = gradient;
 
-            // Draw multiple waves
-            const waves = 3;
-            const frequency = 0.05;
+            const amp = 5 * Math.sin(time * 0.5);
 
             for (let i = 0; i < waves; i++) {
                 ctx.beginPath();
-                ctx.moveTo(0, height / 2);
-
-                for (let x = 0; x < width; x++) {
-                    // Combine sine waves for organic look
-                    const y = height / 2 +
-                        Math.sin(x * frequency + time + i) * 5 * Math.sin(time * 0.5) +
+                ctx.moveTo(0, HEIGHT / 2);
+                for (let x = 0; x <= WIDTH; x += STEP) {
+                    const y = HEIGHT / 2 +
+                        Math.sin(x * frequency + time + i) * amp +
                         Math.cos(x * 0.03 - time) * 2;
-
                     ctx.lineTo(x, y);
                 }
-
-                // Fade out at edges — cyan thinking waves
-                const gradient = ctx.createLinearGradient(0, 0, width, 0);
-                gradient.addColorStop(0, "rgba(34, 211, 238, 0)");
-                gradient.addColorStop(0.5, `rgba(34, 211, 238, ${0.45 + Math.sin(time) * 0.25})`);
-                gradient.addColorStop(1, "rgba(34, 211, 238, 0)");
-
-                ctx.strokeStyle = gradient;
-                ctx.lineWidth = 1.5;
                 ctx.stroke();
             }
-
-            time += 0.15;
-            animationId = requestAnimationFrame(draw);
         };
 
+        if (tier === 'off') {
+            paint();
+            return;
+        }
+
+        const draw = () => {
+            animationId = requestAnimationFrame(draw);
+            if (isHidden()) return;
+            paint();
+            time += 0.15;
+        };
         draw();
 
-        return () => {
-            cancelAnimationFrame(animationId);
-        };
+        return () => cancelAnimationFrame(animationId);
     }, []);
 
     return (
         <canvas
             ref={canvasRef}
             className="w-32 h-8"
-            style={{ width: '128px', height: '32px' }}
+            style={{ width: `${WIDTH}px`, height: `${HEIGHT}px` }}
         />
     );
 };
 
-export default ThinkingVisualizer;
+export default React.memo(ThinkingVisualizer);

@@ -22,7 +22,94 @@ interface ChatMessageProps {
 }
 
 
-const ProjectDeck: React.FC<{ projects: typeof portfolioData.projects; onSelect: (p: any) => void }> = ({ projects, onSelect }) => {
+// Renderer map for react-markdown. Hoisted to module scope on purpose: rebuilding
+// this object each render hands ReactMarkdown fresh component identities and
+// forces it to re-render the whole tree, which during streaming happens
+// many times a second.
+const MD_COMPONENTS = {
+    strong: ({ node, ...props }: any) => <span className="font-bold text-[#f2f1ec]" {...props} />,
+    ul: ({ node, ...props }: any) => <ul className="list-disc list-outside ml-4 my-2 space-y-1 text-[#a8a8a2]" {...props} />,
+    ol: ({ node, ...props }: any) => <ol className="list-decimal list-outside ml-4 my-2 space-y-1 text-[#a8a8a2]" {...props} />,
+    li: ({ node, ...props }: any) => <li className="pl-1 leading-relaxed text-xs sm:text-sm" {...props} />,
+    p: ({ node, ...props }: any) => <p className="mb-2 last:mb-0 leading-relaxed text-[#d6d5cf] text-xs sm:text-sm md:text-[15px]" {...props} />,
+    a: ({ node, ...props }: any) => <a className="text-[#67e8f9] hover:text-[#22d3ee] hover:underline transition-colors font-medium text-xs sm:text-sm" target="_blank" rel="noopener noreferrer" {...props} />,
+    code: ({ node, ...props }: any) => <span className="font-mono text-[10px] sm:text-xs text-[#67e8f9] bg-[#22d3ee]/10 px-1 py-0.5 rounded" {...props} />,
+    h1: ({ node, ...props }: any) => <h1 className="text-base sm:text-lg md:text-xl font-bold text-[#f2f1ec] mb-2 mt-4" {...props} />,
+    h2: ({ node, ...props }: any) => <h2 className="text-sm sm:text-base md:text-lg font-bold text-[#f2f1ec] mb-2 mt-4" {...props} />,
+    h3: ({ node, ...props }: any) => <h3 className="text-sm sm:text-[15px] font-bold text-[#f2f1ec] mb-1 mt-3" {...props} />,
+    blockquote: ({ node, ...props }: any) => <blockquote className="border-l-4 border-[#2e2e2e] pl-4 py-1 my-2 italic text-[#8a8a85] text-xs sm:text-sm" {...props} />,
+};
+
+const MD_PLUGINS = [remarkGfm];
+const noop = () => {};
+
+const FENCE = /^\s*(```|~~~)/;
+const LIST_OR_QUOTE = /^\s{0,3}(?:[-*+]\s|\d{1,9}[.)]\s|>)/;
+const INDENTED = /^\s{2,}\S/;
+
+/**
+ * Split a markdown run into paragraph-sized blocks. A streaming message then
+ * only re-parses its final block on each tick instead of the whole document —
+ * every earlier block is byte-identical and memoised away.
+ *
+ * Two things must survive intact or the rendering changes: fenced code, and
+ * "loose" lists (a blank line between items is spacing, not a boundary —
+ * splitting there would restart an ordered list at 1).
+ */
+function splitBlocks(text: string): string[] {
+    const lines = text.split('\n');
+    const blocks: string[] = [];
+    let current: string[] = [];
+    let fenced = false;
+
+    const currentStartsList = () => {
+        const first = current.find(l => l.trim() !== '');
+        return !!first && LIST_OR_QUOTE.test(first);
+    };
+
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+
+        if (FENCE.test(line)) {
+            fenced = !fenced;
+            current.push(line);
+            continue;
+        }
+        if (fenced || line.trim() !== '') {
+            current.push(line);
+            continue;
+        }
+
+        // Blank line outside a fence — a candidate boundary
+        if (!current.length) continue;
+
+        let j = i + 1;
+        while (j < lines.length && lines[j].trim() === '') j++;
+        const next = j < lines.length ? lines[j] : null;
+
+        if (next && currentStartsList() && (LIST_OR_QUOTE.test(next) || INDENTED.test(next))) {
+            current.push('');   // stay inside the list
+            continue;
+        }
+
+        blocks.push(current.join('\n'));
+        current = [];
+    }
+
+    if (current.length) blocks.push(current.join('\n'));
+    return blocks;
+}
+
+const MarkdownBlock = React.memo<{ text: string }>(({ text }) => (
+    <div className="mb-2 last:mb-0">
+        <ReactMarkdown remarkPlugins={MD_PLUGINS} components={MD_COMPONENTS}>
+            {text}
+        </ReactMarkdown>
+    </div>
+));
+MarkdownBlock.displayName = 'MarkdownBlock';
+
+const ProjectDeck: React.FC<{ projects: typeof portfolioData.projects; onSelect: (p: any) => void }> = React.memo(({ projects, onSelect }) => {
     const [currentIndex, setCurrentIndex] = React.useState(0);
     const [itemsPerPage, setItemsPerPage] = React.useState(2);
 
@@ -101,7 +188,8 @@ const ProjectDeck: React.FC<{ projects: typeof portfolioData.projects; onSelect:
             </div>
         </div>
     );
-};
+});
+ProjectDeck.displayName = 'ProjectDeck';
 
 const RichMessageContent: React.FC<{ content: string; onProjectSelect?: (project: any) => void }> = ({ content, onProjectSelect }) => {
     // Memoize the expensive parsing logic
@@ -116,7 +204,8 @@ const RichMessageContent: React.FC<{ content: string; onProjectSelect?: (project
                 if (part === '{{PROJECTS}}') {
                     return (
                         <div key={index} className="mt-6 mb-2">
-                            <ProjectDeck projects={portfolioData.projects} onSelect={(p) => onProjectSelect?.(p)} />
+                            {/* onProjectSelect is a stable setState fn, so the deck memoises cleanly */}
+                            <ProjectDeck projects={portfolioData.projects} onSelect={onProjectSelect ?? noop} />
                         </div>
                     );
                 }
@@ -182,24 +271,9 @@ const RichMessageContent: React.FC<{ content: string; onProjectSelect?: (project
 
                 return (
                     <div key={index} className="inline-block w-full">
-                        <ReactMarkdown
-                            remarkPlugins={[remarkGfm]}
-                            components={{
-                                strong: ({ node, ...props }: any) => <span className="font-bold text-[#f2f1ec]" {...props} />,
-                                ul: ({ node, ...props }: any) => <ul className="list-disc list-outside ml-4 my-2 space-y-1 text-[#a8a8a2]" {...props} />,
-                                ol: ({ node, ...props }: any) => <ol className="list-decimal list-outside ml-4 my-2 space-y-1 text-[#a8a8a2]" {...props} />,
-                                li: ({ node, ...props }: any) => <li className="pl-1 leading-relaxed text-xs sm:text-sm" {...props} />,
-                                p: ({ node, ...props }: any) => <p className="mb-2 last:mb-0 leading-relaxed text-[#d6d5cf] text-xs sm:text-sm md:text-[15px]" {...props} />,
-                                a: ({ node, ...props }: any) => <a className="text-[#67e8f9] hover:text-[#22d3ee] hover:underline transition-colors font-medium text-xs sm:text-sm" target="_blank" rel="noopener noreferrer" {...props} />,
-                                code: ({ node, ...props }: any) => <span className="font-mono text-[10px] sm:text-xs text-[#67e8f9] bg-[#22d3ee]/10 px-1 py-0.5 rounded" {...props} />,
-                                h1: ({ node, ...props }: any) => <h1 className="text-base sm:text-lg md:text-xl font-bold text-[#f2f1ec] mb-2 mt-4" {...props} />,
-                                h2: ({ node, ...props }: any) => <h2 className="text-sm sm:text-base md:text-lg font-bold text-[#f2f1ec] mb-2 mt-4" {...props} />,
-                                h3: ({ node, ...props }: any) => <h3 className="text-sm sm:text-[15px] font-bold text-[#f2f1ec] mb-1 mt-3" {...props} />,
-                                blockquote: ({ node, ...props }: any) => <blockquote className="border-l-4 border-[#2e2e2e] pl-4 py-1 my-2 italic text-[#8a8a85] text-xs sm:text-sm" {...props} />,
-                            }}
-                        >
-                            {part}
-                        </ReactMarkdown>
+                        {splitBlocks(part).map((block, bi) => (
+                            <MarkdownBlock key={bi} text={block} />
+                        ))}
                     </div>
                 );
             })}
@@ -228,14 +302,17 @@ const ChatMessage: React.FC<ChatMessageProps> = React.memo(({ role, content, onP
                 clearProps: 'transform',
             });
         } else {
-            // Agent message decodes in — blur dissolve from below
+            // Agent message rises in. Deliberately transform + opacity only:
+            // this bubble keeps growing while the response streams, and animating
+            // a CSS `filter` blur re-rasterises the whole markdown subtree on
+            // every frame of the entrance.
             gsap.fromTo(containerRef.current,
-                { y: 22, opacity: 0, filter: 'blur(8px)' },
+                { y: 22, opacity: 0, scale: 0.985 },
                 {
-                    y: 0, opacity: 1, filter: 'blur(0px)',
+                    y: 0, opacity: 1, scale: 1,
                     duration: tier === 'lite' ? 0.4 : 0.6,
                     ease: 'power3.out',
-                    clearProps: 'filter,transform',
+                    clearProps: 'transform',
                 });
         }
     }, { scope: containerRef });

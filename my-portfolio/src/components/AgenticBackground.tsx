@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
-import { motionTier, hasFinePointer } from '../lib/motion';
+import { motionTier, hasFinePointer, isHidden } from '../lib/motion';
 
 interface AgenticBackgroundProps {
     /** Chat world dims the background so content leads */
@@ -26,8 +26,17 @@ const AgenticBackground: React.FC<AgenticBackgroundProps> = ({ dimmed }) => {
         if (!host) return;
         const tier = motionTier();
 
-        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-        renderer.setPixelRatio(Math.min(devicePixelRatio, tier === 'full' ? 2 : 1.5));
+        // MSAA buys nothing for soft round points but costs a full-screen
+        // multisample buffer every frame; the fragment shader antialiases the
+        // dot edges itself. Pixel ratio is capped low for the same reason —
+        // this layer is a diffuse haze, not detail work.
+        const renderer = new THREE.WebGLRenderer({
+            antialias: false,
+            alpha: true,
+            powerPreference: 'high-performance',
+        });
+        const pixelRatio = Math.min(devicePixelRatio, tier === 'full' ? 1.5 : 1);
+        renderer.setPixelRatio(pixelRatio);
         renderer.setClearColor(0x000000, 0);
         host.appendChild(renderer.domElement);
 
@@ -37,8 +46,8 @@ const AgenticBackground: React.FC<AgenticBackgroundProps> = ({ dimmed }) => {
         camera.lookAt(0, 0, 0);
 
         /* grid of points displaced by travelling waves in the vertex shader */
-        const COLS = tier === 'full' ? 180 : 110;
-        const ROWS = tier === 'full' ? 90 : 55;
+        const COLS = tier === 'full' ? 140 : 90;
+        const ROWS = tier === 'full' ? 70 : 45;
         const FIELD_W = 26;
         const FIELD_H = 13;
         const count = COLS * ROWS;
@@ -64,7 +73,7 @@ const AgenticBackground: React.FC<AgenticBackgroundProps> = ({ dimmed }) => {
             uTime: { value: 0 },
             uMouse: { value: new THREE.Vector2(0, 0) },
             uGlobal: { value: 1 }, // hero 1 ↔ chat 0.3
-            uPixelRatio: { value: Math.min(devicePixelRatio, 2) },
+            uPixelRatio: { value: pixelRatio },
             // obsidian palette: faint ink in the calm zones, cyan→violet crests
             uColInk: { value: new THREE.Color('#2e2e2c') },
             uColA: { value: new THREE.Color('#22d3ee') },
@@ -122,9 +131,10 @@ const AgenticBackground: React.FC<AgenticBackgroundProps> = ({ dimmed }) => {
               varying vec2 vUvPos;
 
               void main() {
-                // round points
+                // Round points, softened by alpha rather than discard — discard
+                // forces every fragment down the slow path and kills early-Z.
                 float d = length(gl_PointCoord - 0.5);
-                if (d > 0.5) discard;
+                float mask = 1.0 - smoothstep(0.42, 0.5, d);
 
                 // cyan on the left, blue→violet on the right; ink in the calm zones
                 vec3 warm = mix(uColA, uColB, vUvPos.y);
@@ -134,7 +144,7 @@ const AgenticBackground: React.FC<AgenticBackgroundProps> = ({ dimmed }) => {
                 float energy = smoothstep(0.15, 1.3, abs(vElev));
                 vec3 col = mix(uColInk, hue, energy);
 
-                float alpha = (0.22 + energy * 0.6) * (0.55 + vSeed * 0.45) * uGlobal;
+                float alpha = (0.22 + energy * 0.6) * (0.55 + vSeed * 0.45) * uGlobal * mask;
                 gl_FragColor = vec4(col, alpha);
               }
             `,
@@ -152,7 +162,15 @@ const AgenticBackground: React.FC<AgenticBackgroundProps> = ({ dimmed }) => {
             camera.updateProjectionMatrix();
         };
         resize();
-        window.addEventListener('resize', resize);
+
+        // Reallocating the drawing buffer is expensive; coalesce resize bursts
+        // (and mobile URL-bar shrink/grow) into one call.
+        let resizeTimer = 0;
+        const onResize = () => {
+            clearTimeout(resizeTimer);
+            resizeTimer = window.setTimeout(resize, 120);
+        };
+        window.addEventListener('resize', onResize);
 
         /* mouse → eased uniform + slight camera parallax */
         const mouse = { x: 0, y: 0, tx: 0, ty: 0 };
@@ -167,8 +185,11 @@ const AgenticBackground: React.FC<AgenticBackgroundProps> = ({ dimmed }) => {
         const clock = new THREE.Clock();
 
         const frame = () => {
-            const t = clock.getElapsedTime();
-            uniforms.uTime.value = t;
+            // Backgrounded tabs still get animation-loop callbacks in some
+            // browsers — never pay for a frame nobody sees.
+            if (isHidden()) { clock.getDelta(); return; }
+
+            uniforms.uTime.value += clock.getDelta();
 
             // ease layer opacity toward target (hero 1 ↔ chat 0.3)
             const target = dimmedRef.current ? 0.3 : 1;
@@ -196,7 +217,8 @@ const AgenticBackground: React.FC<AgenticBackgroundProps> = ({ dimmed }) => {
 
         return () => {
             renderer.setAnimationLoop(null);
-            window.removeEventListener('resize', resize);
+            clearTimeout(resizeTimer);
+            window.removeEventListener('resize', onResize);
             window.removeEventListener('pointermove', onMove);
             geometry.dispose();
             material.dispose();

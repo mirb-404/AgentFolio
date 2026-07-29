@@ -15,6 +15,27 @@ export { gsap, SplitText };
 
 export type MotionTier = 'full' | 'lite' | 'off';
 
+// motionTier() is consulted on every animated mount — every chat message, every
+// tool chip, every transition. matchMedia() allocates a fresh MediaQueryList on
+// each call, so the queries are resolved once and the answer cached until the
+// environment actually changes.
+let reduceMq: MediaQueryList | null = null;
+let coarseMq: MediaQueryList | null = null;
+let fineMq: MediaQueryList | null = null;
+let tierCache: MotionTier | null = null;
+
+function ensureQueries() {
+    if (reduceMq || typeof window === 'undefined') return;
+    reduceMq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    coarseMq = window.matchMedia('(pointer: coarse)');
+    fineMq = window.matchMedia('(pointer: fine)');
+    const invalidate = () => { tierCache = null; };
+    reduceMq.addEventListener('change', invalidate);
+    coarseMq.addEventListener('change', invalidate);
+    fineMq.addEventListener('change', invalidate);
+    window.addEventListener('resize', invalidate, { passive: true });
+}
+
 /**
  * full — desktop, fine pointer, motion allowed
  * lite — mobile / coarse pointer: shorter durations, no physics, low particle counts
@@ -22,13 +43,21 @@ export type MotionTier = 'full' | 'lite' | 'off';
  */
 export function motionTier(): MotionTier {
     if (typeof window === 'undefined') return 'off';
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return 'off';
-    if (window.innerWidth < 768 || window.matchMedia('(pointer: coarse)').matches) return 'lite';
-    return 'full';
+    if (tierCache) return tierCache;
+    ensureQueries();
+    if (reduceMq!.matches) return (tierCache = 'off');
+    if (window.innerWidth < 768 || coarseMq!.matches) return (tierCache = 'lite');
+    return (tierCache = 'full');
 }
 
-export const hasFinePointer = () =>
-    typeof window !== 'undefined' && window.matchMedia('(pointer: fine)').matches;
+export const hasFinePointer = () => {
+    if (typeof window === 'undefined') return false;
+    ensureQueries();
+    return fineMq!.matches;
+};
+
+/** True while the tab is backgrounded — render loops skip work instead of burning frames. */
+export const isHidden = () => typeof document !== 'undefined' && document.hidden;
 
 /**
  * Fire a Physics2D particle burst at viewport coordinates.
@@ -38,7 +67,9 @@ export function burstAt(x: number, y: number, opts?: { count?: number; colors?: 
     const tier = motionTier();
     if (tier === 'off') return;
 
-    const count = opts?.count ?? (tier === 'lite' ? 6 : 16);
+    // Each dot becomes its own compositor layer, and the burst fires at the exact
+    // moment the world transition is busiest — keep the count modest.
+    const count = opts?.count ?? (tier === 'lite' ? 5 : 10);
     const colors = opts?.colors ?? ['#22d3ee', '#67e8f9', '#f2f1ec', '#0ea5e9'];
 
     const frag = document.createDocumentFragment();

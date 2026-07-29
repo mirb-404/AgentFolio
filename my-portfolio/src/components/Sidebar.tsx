@@ -119,4 +119,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, onClear, onCommandSe
     );
 };
 
-export default Sidebar;
+// Mounted for the whole chat session and re-rendered by every streaming tick
+// otherwise — its props only change when the sidebar actually opens or locks.
+export default React.memo(Sidebar);

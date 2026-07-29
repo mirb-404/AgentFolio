@@ -121,20 +121,24 @@ const Layout: React.FC<LayoutProps> = ({ children, light = false, onHomeClick, o
                         {Wordmark}
                     </div>
 
-                    {/* Blog button — rotating cyan shine border */}
-                    <div className="relative flex blog-shine-wrap rounded-[10px] shrink-0 group" data-magnetic>
+                    {/* Blog button — rotating cyan shine border.
+                        The shine ring clips its spinning gradient, so the "new" dot
+                        lives on an outer wrapper to stay outside that clip. */}
+                    <div className="relative shrink-0 group" data-magnetic>
                         <span className="sm:hidden absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-[#34d399] z-10 pointer-events-none" />
-                        <button
-                            onClick={handleBlogClick}
-                            className="blog-shine-inner"
-                            title="View Blog"
-                        >
-                            <BookOpen size={13} className="text-[#67e8f9] group-hover:text-white transition-colors duration-200 shrink-0" />
-                            <span className="hidden sm:inline font-grotesk font-semibold text-[12px] tracking-wide text-[#a5f3fc] group-hover:text-white transition-colors duration-200">
-                                Blog
-                            </span>
-                            <span className="hidden sm:inline text-[8px] font-bold text-[#34d399] tracking-widest leading-none">new</span>
-                        </button>
+                        <div className="flex blog-shine-wrap rounded-[10px]">
+                            <button
+                                onClick={handleBlogClick}
+                                className="blog-shine-inner"
+                                title="View Blog"
+                            >
+                                <BookOpen size={13} className="text-[#67e8f9] group-hover:text-white transition-colors duration-200 shrink-0" />
+                                <span className="hidden sm:inline font-grotesk font-semibold text-[12px] tracking-wide text-[#a5f3fc] group-hover:text-white transition-colors duration-200">
+                                    Blog
+                                </span>
+                                <span className="hidden sm:inline text-[8px] font-bold text-[#34d399] tracking-widest leading-none">new</span>
+                            </button>
+                        </div>
                     </div>
 
                     {/* Social links */}

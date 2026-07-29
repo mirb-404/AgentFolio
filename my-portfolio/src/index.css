@@ -34,7 +34,10 @@ body {
   background-size: 28px 28px;
 }
 
-/* Fine film grain — kills the flat-digital look on the obsidian base */
+/* Fine film grain — kills the flat-digital look on the obsidian base.
+   translateZ promotes it to its own compositor layer: it sits above two
+   permanently animating canvases, so without promotion the grain repaints
+   on every single background frame. */
 body::after {
   content: '';
   position: fixed;
@@ -42,6 +45,7 @@ body::after {
   z-index: 2;
   pointer-events: none;
   opacity: 0.03;
+  transform: translateZ(0);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
@@ -96,23 +100,50 @@ body, html {
   will-change: clip-path, opacity;
 }
 
-/* Blog button — rotating cyan-light shine border */
-@property --shine-angle {
-  syntax: '<angle>';
-  initial-value: 0deg;
-  inherits: false;
+/* Rotating cyan shine borders (blog button + hero palette).
+   The gradient itself is static and an oversized square child is spun by the
+   compositor. Animating a conic-gradient's own angle instead — as this used to —
+   repaints the whole panel every frame on the main thread, which is what made
+   typing in the hero input feel sticky. */
+@keyframes shine-spin {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to   { transform: translate(-50%, -50%) rotate(360deg); }
 }
 
-@keyframes shine-rotate {
-  to { --shine-angle: 360deg; }
+/* The spinning square must cover the wrapper at every rotation angle:
+   160% of the width, kept square, clears the box diagonal for both wrappers. */
+.blog-shine-wrap::before,
+.palette-shine-wrap::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 160%;
+  aspect-ratio: 1 / 1;
+  z-index: -1;
+  pointer-events: none;
+  will-change: transform;
+  /* also the resting state when the animation is disabled */
+  transform: translate(-50%, -50%);
+  animation: shine-spin linear infinite;
 }
 
-/* Outer wrapper: conic-gradient is the animated "border" */
+/* Outer wrapper clips the spinning square; the inner button covers the middle,
+   leaving only the 1.5px padding ring lit. */
 .blog-shine-wrap {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
   padding: 1.5px;
   border-radius: 10px;
+  background: rgba(34, 211, 238, 0.12);
+  display: flex;
+  align-items: stretch;
+}
+
+.blog-shine-wrap::before {
+  animation-duration: 3s;
   background: conic-gradient(
-    from var(--shine-angle),
     rgba(34, 211, 238, 0.12) 0%,
     rgba(34, 211, 238, 0.12) 52%,
     rgba(103, 232, 249, 0.55) 68%,
@@ -120,14 +151,10 @@ body, html {
     rgba(103, 232, 249, 0.55) 91%,
     rgba(34, 211, 238, 0.12) 100%
   );
-  animation: shine-rotate 3s linear infinite;
-  display: flex;
-  align-items: stretch;
 }
 
-.blog-shine-wrap:hover {
+.blog-shine-wrap:hover::before {
   background: conic-gradient(
-    from var(--shine-angle),
     rgba(34, 211, 238, 0.2) 0%,
     rgba(34, 211, 238, 0.2) 42%,
     rgba(103, 232, 249, 0.7) 62%,
@@ -157,13 +184,26 @@ body, html {
   background: #0e1517;
 }
 
-/* Hero command palette — slow rotating cyan glow ring + soft outer halo */
+/* Hero command palette — slow rotating glow ring.
+   The halo is a static box-shadow: it rasterizes once, where the old animated
+   blur(16px) re-blurred a full-size gradient on every frame. The panel's own
+   drop shadow moves here too, since overflow clipping would eat it. */
 .palette-shine-wrap {
   position: relative;
+  isolation: isolate;
+  overflow: hidden;
   padding: 1.5px;
   border-radius: 18px;
+  background: rgba(34, 211, 238, 0.06);
+  box-shadow:
+    0 24px 64px rgba(0, 0, 0, 0.6),
+    0 0 30px rgba(34, 211, 238, 0.14),
+    0 0 80px rgba(34, 211, 238, 0.07);
+}
+
+.palette-shine-wrap::before {
+  animation-duration: 5s;
   background: conic-gradient(
-    from var(--shine-angle),
     rgba(34, 211, 238, 0.05) 0%,
     rgba(34, 211, 238, 0.05) 55%,
     rgba(103, 232, 249, 0.4) 72%,
@@ -171,33 +211,11 @@ body, html {
     rgba(103, 232, 249, 0.4) 92%,
     rgba(34, 211, 238, 0.05) 100%
   );
-  animation: shine-rotate 5s linear infinite;
-}
-
-/* Blurred halo — same rotating gradient, diffused behind the panel */
-.palette-shine-wrap::before {
-  content: '';
-  position: absolute;
-  inset: -3px;
-  border-radius: 22px;
-  background: conic-gradient(
-    from var(--shine-angle),
-    rgba(34, 211, 238, 0) 0%,
-    rgba(34, 211, 238, 0) 55%,
-    rgba(34, 211, 238, 0.35) 75%,
-    rgba(103, 232, 249, 0.55) 82%,
-    rgba(34, 211, 238, 0.35) 90%,
-    rgba(34, 211, 238, 0) 100%
-  );
-  filter: blur(16px);
-  z-index: -1;
-  animation: shine-rotate 5s linear infinite;
-  pointer-events: none;
 }
 
 /* Kill decorative CSS loops for users who opt out of motion */
 @media (prefers-reduced-motion: reduce) {
   .animate-status-ping { animation: none; }
-  .blog-shine-wrap { animation: none; }
-  .palette-shine-wrap, .palette-shine-wrap::before { animation: none; }
+  .blog-shine-wrap::before,
+  .palette-shine-wrap::before { animation: none; }
 }

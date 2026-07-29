@@ -90,4 +90,4 @@ const ActionButtons: React.FC<ActionButtonsProps> = ({ prompts, onSelect, isDisa
     );
 };
 
-export default ActionButtons;
+export default React.memo(ActionButtons);

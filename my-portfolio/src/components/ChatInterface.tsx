@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import { useGSAP } from '@gsap/react';
-import { gsap, SplitText, motionTier, burstAt } from '../lib/motion';
+import { gsap, SplitText, motionTier, burstAt, isHidden } from '../lib/motion';
 import ChatMessage from './ChatMessage';
 import ActionButtons from './ActionButtons';
 import ThinkingVisualizer from './ThinkingVisualizer';
@@ -50,8 +50,58 @@ const ScrambleLabel: React.FC<{ text: string }> = ({ text }) => {
     return <span ref={ref}>{text}</span>;
 };
 
+/**
+ * The chat composer owns its own draft text.
+ * Keeping `inputValue` in ChatInterface meant every keystroke re-rendered the
+ * whole transcript, the suggestion rail and the sidebar — that is the lag you
+ * feel while typing.
+ */
+const ChatInput = React.memo<{ onSend: (text: string) => void; disabled: boolean }>(({ onSend, disabled }) => {
+    const [value, setValue] = useState("");
+    const sendBtnRef = useRef<HTMLButtonElement>(null);
+
+    const submit = (e: React.FormEvent) => {
+        e.preventDefault();
+        const text = value;
+        if (!text.trim()) return;
+        if (sendBtnRef.current) {
+            const r = sendBtnRef.current.getBoundingClientRect();
+            burstAt(r.left + r.width / 2, r.top + r.height / 2);
+        }
+        setValue("");
+        onSend(text);
+    };
+
+    return (
+        <form
+            onSubmit={submit}
+            className="flex gap-2 mt-1.5 relative items-center bg-[#0f0f0f] p-1.5 rounded-xl border border-[#232323] focus-within:border-[#22d3ee]/35 focus-within:ring-1 focus-within:ring-[#22d3ee]/10 transition-all duration-200"
+        >
+            <input
+                type="text"
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
+                placeholder="Ask me anything..."
+                disabled={disabled}
+                className="flex-1 bg-transparent text-[#f2f1ec] px-3 py-2 text-sm sm:text-[15px] outline-none placeholder:text-[#555550] font-sans disabled:opacity-40 disabled:cursor-not-allowed"
+            />
+            <button
+                ref={sendBtnRef}
+                type="submit"
+                disabled={!value.trim() || disabled}
+                data-magnetic
+                className="p-2 sm:p-2.5 bg-[#22d3ee] text-[#0a0a0a] rounded-xl hover:bg-[#67e8f9] disabled:opacity-30 disabled:cursor-not-allowed transition-colors shrink-0"
+            >
+                <Send size={14} className="sm:hidden" />
+                <Send size={15} className="hidden sm:block" />
+            </button>
+        </form>
+    );
+});
+ChatInput.displayName = 'ChatInput';
+
 /** Fake-real telemetry strip under the chat input */
-const StatusBar: React.FC = () => {
+const StatusBar = React.memo(() => {
     const [ms, setMs] = useState(24);
     useEffect(() => {
         const id = setInterval(() => setMs(16 + Math.round(Math.random() * 26)), 3200);
@@ -69,23 +119,24 @@ const StatusBar: React.FC = () => {
             <span>edge cache · {ms}ms</span>
         </div>
     );
-};
+});
+StatusBar.displayName = 'StatusBar';
 
 
 const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, activePrompt, onPromptHandled, isSidebarOpen, setIsSidebarOpen }) => {
     const [messages, setMessages] = useState<Message[]>([]);
-    const [inputValue, setInputValue] = useState("");
     const [isTyping, setIsTyping] = useState(false);
     const [showMatrix, setShowMatrix] = useState(false);
     const [selectedProject, setSelectedProject] = useState<any>(null);
     const [isFetchingTool, setIsFetchingTool] = useState(false); // New state for tool execution UI
     const [fakeToolName, setFakeToolName] = useState(""); // Track fake tool names for the UI
 
+    const busy = isTyping || isFetchingTool;
+
     // Refs for animations
     const containerRef = useRef<HTMLDivElement>(null);
     const heroRef = useRef<HTMLDivElement>(null);
     const nameRef = useRef<HTMLHeadingElement>(null);
-    const sendBtnRef = useRef<HTMLButtonElement>(null);
     const inputDockRef = useRef<HTMLDivElement>(null);
     const chatRef = useRef<HTMLDivElement>(null);
     const bottomRef = useRef<HTMLDivElement>(null);
@@ -103,37 +154,53 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, acti
     const messagesContainerRef = useRef<HTMLDivElement>(null);
     const messagesContentRef = useRef<HTMLDivElement>(null);
     const shouldAutoScrollRef = useRef(true);
+    // Latest transcript, readable from the stable callbacks below without
+    // making them depend on (and be rebuilt by) every state change
+    const messagesRef = useRef<Message[]>(messages);
+    messagesRef.current = messages;
+
+    // Every "keep the transcript pinned" request funnels through one rAF, so a
+    // burst of stream chunks costs a single layout read + scroll write per frame
+    // instead of one per chunk.
+    const stickRafRef = useRef(0);
+    const stickToBottom = useCallback(() => {
+        if (stickRafRef.current) return;
+        stickRafRef.current = requestAnimationFrame(() => {
+            stickRafRef.current = 0;
+            const el = messagesContainerRef.current;
+            if (!el || !shouldAutoScrollRef.current) return;
+            // A smooth scroll from a new message owns the position while it runs;
+            // writing scrollTop underneath it makes the two fight and judder.
+            if (gsap.isTweening(el)) return;
+            el.scrollTop = el.scrollHeight - el.clientHeight;
+        });
+    }, []);
 
     // Widgets (project decks, timelines, charts) grow well after the stream ends —
-    // track content height so the output stays in view instead of hiding below the fold
+    // track content height so the output stays in view instead of hiding below the fold.
+    // This also covers plain text growth during streaming, so nothing else needs
+    // to chase the scroll position while a response is arriving.
     useEffect(() => {
         const content = messagesContentRef.current;
         if (!content) return;
-        const observer = new ResizeObserver(() => {
-            if (shouldAutoScrollRef.current && messagesContainerRef.current) {
-                const el = messagesContainerRef.current;
-                el.scrollTop = el.scrollHeight - el.clientHeight;
-            }
-        });
+        const observer = new ResizeObserver(stickToBottom);
         observer.observe(content);
-        return () => observer.disconnect();
-    }, []);
+        return () => {
+            observer.disconnect();
+            if (stickRafRef.current) cancelAnimationFrame(stickRafRef.current);
+        };
+    }, [stickToBottom]);
 
-    const scrollToBottom = (instant = false) => {
+    const scrollToBottom = useCallback(() => {
         const el = messagesContainerRef.current;
         if (!el) return;
-        const target = el.scrollHeight - el.clientHeight;
-        if (instant) {
-            el.scrollTop = target;
-        } else {
-            gsap.to(el, {
-                scrollTop: target,
-                duration: 0.55,
-                ease: 'power3.out',
-                overwrite: 'auto',
-            });
-        }
-    };
+        gsap.to(el, {
+            scrollTop: el.scrollHeight - el.clientHeight,
+            duration: 0.55,
+            ease: 'power3.out',
+            overwrite: 'auto',
+        });
+    }, []);
 
     // Scroll intent: only a deliberate upward gesture disables follow mode.
     // (The old onScroll check raced with our own smooth-scroll tween and the
@@ -229,12 +296,14 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, acti
                     ease: 'power2.in',
                     stagger: { amount: 0.14, from: 'center' },
                 }, 0)
-                    // The rest of the hero gets pulled into the jump — blur + recede
+                    // The rest of the hero gets pulled into the jump — recede + fade.
+                    // Transform/opacity only: these elements include the command
+                    // palette with its live shine ring, and a `filter` tween would
+                    // re-rasterise all of it every frame, on top of the warp jump.
                     .to('[data-hero-item]', {
                         opacity: 0,
                         y: -34,
                         scale: 0.92,
-                        filter: 'blur(10px)',
                         duration: 0.55,
                         ease: 'power2.in',
                         stagger: 0.045,
@@ -244,11 +313,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, acti
                         if (activeSplitRef.current === split) releaseSplit();
                     })
                     .fromTo(chatRef.current,
-                        { opacity: 0, y: 26, scale: 0.985, filter: 'blur(6px)' },
+                        { opacity: 0, y: 26, scale: 0.985 },
                         {
-                            display: 'flex', opacity: 1, y: 0, scale: 1, filter: 'blur(0px)',
+                            display: 'flex', opacity: 1, y: 0, scale: 1,
                             duration: 0.55, ease: 'agentOut', pointerEvents: 'all',
-                            clearProps: 'filter',
                         })
                     .fromTo(inputDockRef.current,
                         { opacity: 0, y: 24 },
@@ -293,12 +361,12 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, acti
             tl.to(chatRef.current, {
                 opacity: 0,
                 y: 16,
-                filter: 'blur(6px)',
+                scale: 0.99,
                 duration: 0.35,
                 ease: 'power2.in',
                 display: 'none',
                 pointerEvents: 'none',
-                clearProps: 'filter',
+                clearProps: 'transform',
             })
                 .to(inputDockRef.current, { opacity: 0, y: 10, display: 'none', duration: 0.28, ease: 'power2.in' }, 0)
                 .set('[data-hero-item]', { clearProps: 'all' })
@@ -313,20 +381,15 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, acti
         }
     }, { scope: containerRef, dependencies: [hasStarted] });
 
-    // Auto-scroll on new messages (start of generation)
+    // Auto-scroll on new messages (start of generation).
+    // Growth *within* a message is handled by the ResizeObserver above — the old
+    // second effect re-ran on every chunk and forced a layout each time.
     useEffect(() => {
         if (hasStarted) {
-            scrollToBottom();
             shouldAutoScrollRef.current = true;
+            scrollToBottom();
         }
-    }, [messages.length, hasStarted]);
-
-    // Auto-scroll during streaming — only if user hasn't scrolled up
-    useEffect(() => {
-        if (isTyping && shouldAutoScrollRef.current) {
-            scrollToBottom(true);
-        }
-    }, [messages, isTyping]);
+    }, [messages.length, hasStarted, scrollToBottom]);
 
     const dispatchMessage = (text: string) => {
         shouldAutoScrollRef.current = true;
@@ -341,7 +404,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, acti
         setMessages(prev => [...prev, userMsg]);
         setIsTyping(true);
 
-        const currentMessages = [...messages, userMsg]; // Capture immediate state
+        const currentMessages = [...messagesRef.current, userMsg]; // Capture immediate state
         generateResponseStream(text, currentMessages);
     };
 
@@ -352,17 +415,17 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, acti
         if (pending) dispatchMessage(pending);
     };
 
-    const handleSendMessage = (text: string) => {
+    // The send path is handed to memoised children (composer, suggestion rail,
+    // sidebar, hero palette). Routing through a latest-value ref keeps its
+    // identity stable for the life of the component so none of them re-render
+    // while a response streams.
+    const sendRef = useRef<(text: string) => void>(() => {});
+    sendRef.current = (text: string) => {
         if (!text.trim()) return;
 
         // Check for special commands before triggering onStart,
         // so commands like 'matrix' don't navigate away from the hero page.
-        if (processCommand(text)) {
-            setInputValue("");
-            return;
-        }
-
-        setInputValue("");
+        if (processCommand(text)) return;
 
         if (!hasStarted) {
             // Hold the message until the hero-shatter transition lands in the chat,
@@ -374,6 +437,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, acti
 
         dispatchMessage(text);
     };
+    const handleSendMessage = useCallback((text: string) => sendRef.current(text), []);
+    const handleClearMessages = useCallback(() => setMessages([]), []);
+    const handleCloseSidebar = useCallback(() => setIsSidebarOpen(false), [setIsSidebarOpen]);
 
     const processCommand = (input: string): boolean => {
         const cmd = input.trim().toLowerCase();
@@ -517,36 +583,64 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, acti
         }]);
 
         setIsTyping(true);
-        abortControllerRef.current = new AbortController();
+        const ctrl = new AbortController();
+        abortControllerRef.current = ctrl;
 
         // Simulate network delay for realism
         await new Promise(resolve => setTimeout(resolve, 600));
 
-        let currentText = "";
-        const chunkSize = 4; // Characters per tick
+        // Typewriter driven by the display rather than by a timer. The old loop
+        // committed 4 characters every ~20ms — up to a hundred React renders a
+        // second, each one re-rendering (and re-parsing) the message. Now the
+        // character count is derived from elapsed time and committed on a frame
+        // boundary, at most once per COMMIT_MS.
+        const CHARS_PER_SECOND = 320;
+        const COMMIT_MS = 60;
 
-        for (let i = 0; i < responseText.length; i += chunkSize) {
-            if (abortControllerRef.current?.signal.aborted) break;
+        // Browsers suspend rAF in a background tab. If the visitor switches away
+        // mid-response, fall back to a timer so the answer still lands instead of
+        // freezing them out behind a disabled composer.
+        const schedule = (fn: () => void) => {
+            if (isHidden()) window.setTimeout(fn, 100);
+            else requestAnimationFrame(fn);
+        };
 
-            const chunk = responseText.slice(i, i + chunkSize);
-            currentText += chunk;
+        await new Promise<void>((resolve) => {
+            const startedAt = performance.now();
+            let shown = 0;
+            let lastCommit = 0;
 
-            setMessages(prev => prev.map(msg =>
-                msg.id === msgId
-                    ? { ...msg, content: currentText }
-                    : msg
-            ));
+            const step = () => {
+                if (ctrl.signal.aborted) { resolve(); return; }
 
-            // Random typing delay
-            await new Promise(resolve => setTimeout(resolve, 10 + Math.random() * 20));
-        }
+                const now = performance.now();
+                const target = Math.min(
+                    responseText.length,
+                    Math.floor(((now - startedAt) / 1000) * CHARS_PER_SECOND)
+                );
+                const done = target >= responseText.length;
+
+                if (target !== shown && (done || now - lastCommit >= COMMIT_MS)) {
+                    shown = target;
+                    lastCommit = now;
+                    const slice = responseText.slice(0, shown);
+                    setMessages(prev => prev.map(msg =>
+                        msg.id === msgId ? { ...msg, content: slice } : msg
+                    ));
+                }
+
+                if (done) { resolve(); return; }
+                schedule(step);
+            };
+            schedule(step);
+        });
 
         setMessages(prev => prev.map(msg =>
             msg.id === msgId ? { ...msg, isStreaming: false } : msg
         ));
 
         setIsTyping(false);
-        abortControllerRef.current = null;
+        if (abortControllerRef.current === ctrl) abortControllerRef.current = null;
     };
 
     /**
@@ -756,7 +850,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, acti
             }]);
 
             let lastUpdateTime = 0;
-            const THROTTLE_MS = 50;
+            // Matches the local typewriter's commit budget — one React render per
+            // ~60ms is well under a frame's worth of markdown work.
+            const THROTTLE_MS = 60;
 
             let toolCallName = "";
             let toolCallArgs = "";
@@ -941,7 +1037,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, acti
                     ))}
 
                     {/* Loading / Tool Execution indicator */}
-                    {(isTyping || isFetchingTool) && !messages.some(m => m.isStreaming && m.content !== '') && (
+                    {busy && !messages.some(m => m.isStreaming && m.content !== '') && (
                         <div className="flex w-full mb-5 justify-start">
                             <div className="flex max-w-[85%] flex-row gap-2.5">
                                 <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 bg-[#141414] border border-[#232323] text-[#8a8a85]">
@@ -992,10 +1088,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, acti
             {/* Sidebar */}
             <Sidebar
                 isOpen={isSidebarOpen}
-                onClose={() => setIsSidebarOpen(false)}
-                onClear={() => setMessages([])}
+                onClose={handleCloseSidebar}
+                onClear={handleClearMessages}
                 onCommandSelect={handleSendMessage}
-                isDisabled={isTyping || isFetchingTool}
+                isDisabled={busy}
             />
 
             {/* Toggle Sidebar Button - Desktop, chat world only */}
@@ -1022,39 +1118,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, acti
                     <ActionButtons
                         prompts={suggestPrompts}
                         onSelect={handleSendMessage}
-                        isDisabled={isTyping || isFetchingTool}
+                        isDisabled={busy}
                     />
 
-                    <form
-                        onSubmit={(e) => {
-                            e.preventDefault();
-                            if (inputValue.trim() && sendBtnRef.current) {
-                                const r = sendBtnRef.current.getBoundingClientRect();
-                                burstAt(r.left + r.width / 2, r.top + r.height / 2);
-                            }
-                            handleSendMessage(inputValue);
-                        }}
-                        className="flex gap-2 mt-1.5 relative items-center bg-[#0f0f0f] p-1.5 rounded-xl border border-[#232323] focus-within:border-[#22d3ee]/35 focus-within:ring-1 focus-within:ring-[#22d3ee]/10 transition-all duration-200"
-                    >
-                        <input
-                            type="text"
-                            value={inputValue}
-                            onChange={(e) => setInputValue(e.target.value)}
-                            placeholder="Ask me anything..."
-                            disabled={isTyping || isFetchingTool}
-                            className="flex-1 bg-transparent text-[#f2f1ec] px-3 py-2 text-sm sm:text-[15px] outline-none placeholder:text-[#555550] font-sans disabled:opacity-40 disabled:cursor-not-allowed"
-                        />
-                        <button
-                            ref={sendBtnRef}
-                            type="submit"
-                            disabled={!inputValue.trim() || isTyping || isFetchingTool}
-                            data-magnetic
-                            className="p-2 sm:p-2.5 bg-[#22d3ee] text-[#0a0a0a] rounded-xl hover:bg-[#67e8f9] disabled:opacity-30 disabled:cursor-not-allowed transition-colors shrink-0"
-                        >
-                            <Send size={14} className="sm:hidden" />
-                            <Send size={15} className="hidden sm:block" />
-                        </button>
-                    </form>
+                    <ChatInput onSend={handleSendMessage} disabled={busy} />
                 </div>
 
                 {/* Telemetry strip */}
