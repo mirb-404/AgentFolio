@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
-import { gsap, motionTier, hasFinePointer, isHidden } from '../lib/motion';
+import { gsap, motionTier, hasFinePointer, isHidden, beginHeavyMoment } from '../lib/motion';
 
 interface WarpBackgroundProps {
     active: boolean;
@@ -28,6 +28,10 @@ const CENTER_LERP = 0.04;        // smoothing for centre movement
 // Stars are batched into depth bands: one stroke() per band instead of one per
 // star turns ~450 canvas draw calls a frame into 8.
 const DEPTH_BANDS = 8;
+// The trail effect repaints the whole canvas every frame, so its cost is pure
+// fill rate. Streaks are motion blur by definition — rendering below CSS size
+// and letting the browser upscale halves that fill with no visible loss.
+const RES_SCALE = 0.7;
 
 function resetStar(star: Star, cx: number, cy: number) {
     // Spawn from a tight cluster at the warp centre
@@ -74,8 +78,13 @@ const WarpBackground = forwardRef<WarpHandle, WarpBackgroundProps>(({ active }, 
             targetRef.current = 1;
             opacityRef.current = Math.max(opacityRef.current, 0.85);
             startLoop();
+            // Ambient layers stand down for the length of the jump
+            const releaseHeavy = beginHeavyMoment();
             gsap.timeline({
-                onComplete: () => { targetRef.current = activeRef.current ? 1 : 0; },
+                onComplete: () => {
+                    targetRef.current = activeRef.current ? 1 : 0;
+                    releaseHeavy();
+                },
             })
                 .to(speedRef.current, { mult: peak, duration: 0.7, ease: 'power3.in' })
                 .to(speedRef.current, { mult: 1, duration: 1.1, ease: 'power2.out' }, '+=0.25');
@@ -279,12 +288,23 @@ const WarpBackground = forwardRef<WarpHandle, WarpBackgroundProps>(({ active }, 
         if (!canvas) return;
 
         const sync = () => {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
+            canvas.width = Math.round(window.innerWidth * RES_SCALE);
+            canvas.height = Math.round(window.innerHeight * RES_SCALE);
+            clearedRef.current = true; // resizing wipes the backing store
         };
         sync();
-        window.addEventListener('resize', sync);
-        return () => window.removeEventListener('resize', sync);
+
+        // Resizing reallocates the backing store — coalesce drag bursts
+        let timer = 0;
+        const onResize = () => {
+            clearTimeout(timer);
+            timer = window.setTimeout(sync, 120);
+        };
+        window.addEventListener('resize', onResize);
+        return () => {
+            clearTimeout(timer);
+            window.removeEventListener('resize', onResize);
+        };
     }, []);
 
     // Drive the fade based on active prop
@@ -314,6 +334,11 @@ const WarpBackground = forwardRef<WarpHandle, WarpBackgroundProps>(({ active }, 
                 pointerEvents: 'none',
                 display: 'block',
                 opacity: 0,
+                // Promoted up front: allocating a full-screen compositor layer is
+                // itself a hitch, and it would otherwise land on the exact frame
+                // the jump starts.
+                transform: 'translateZ(0)',
+                willChange: 'opacity',
             }}
         />
     );

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import { useGSAP } from '@gsap/react';
-import { gsap, SplitText, motionTier, burstAt, isHidden } from '../lib/motion';
+import { gsap, SplitText, motionTier, burstAt, isHidden, beginHeavyMoment } from '../lib/motion';
 import ChatMessage from './ChatMessage';
 import ActionButtons from './ActionButtons';
 import ThinkingVisualizer from './ThinkingVisualizer';
@@ -269,7 +269,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, acti
     // GSAP Transitions — hero shatters into the warp jump, chat materializes after
     const prevStartedRef = useRef(false);
     const transitionTlRef = useRef<gsap.core.Timeline | null>(null);
-    useGSAP(() => {
+    useGSAP((_, contextSafe) => {
         const tier = motionTier();
         const wasStarted = prevStartedRef.current;
         prevStartedRef.current = hasStarted;
@@ -281,62 +281,86 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, acti
         transitionTlRef.current = null;
 
         if (hasStarted) {
-            const tl = gsap.timeline();
-            transitionTlRef.current = tl;
+            // Everything below is deferred by one frame. This effect runs as a
+            // layout effect, so it would otherwise pile onto the very frame React
+            // is already committing the world swap in — new header subtree, warp
+            // canvas waking, plus SplitText measuring the 80px headline
+            // synchronously. Two spikes in one frame is the hitch you feel on
+            // Enter; giving the browser its paint first splits them apart, at a
+            // cost of ~6ms nobody can perceive.
+            const releaseHeavy = beginHeavyMoment();
+            let raf = 0;
 
-            if (tier === 'full' && nameRef.current) {
-                // Name slips up through a per-char mask — quiet exit, mirrors the entrance.
-                // Release any split still owning the headline (e.g. entrance mid-flight) first.
-                releaseSplit();
-                const split = new SplitText(nameRef.current, { type: 'chars', mask: 'chars' });
-                activeSplitRef.current = split;
-                tl.to(split.chars, {
-                    yPercent: -110,
-                    duration: 0.55,
-                    ease: 'power2.in',
-                    stagger: { amount: 0.14, from: 'center' },
-                }, 0)
-                    // The rest of the hero gets pulled into the jump — recede + fade.
-                    // Transform/opacity only: these elements include the command
-                    // palette with its live shine ring, and a `filter` tween would
-                    // re-rasterise all of it every frame, on top of the warp jump.
-                    .to('[data-hero-item]', {
-                        opacity: 0,
-                        y: -34,
-                        scale: 0.92,
+            // contextSafe keeps the deferred timeline inside useGSAP's context, so
+            // `[data-hero-item]` still resolves against the scope and the tweens
+            // are still tracked for cleanup despite running a frame later.
+            const build = contextSafe!(() => {
+                const tl = gsap.timeline({
+                    onComplete: releaseHeavy,
+                    onInterrupt: releaseHeavy,
+                });
+                transitionTlRef.current = tl;
+
+                if (tier === 'full' && nameRef.current) {
+                    // Name slips up through a per-char mask — quiet exit, mirrors the entrance.
+                    // Release any split still owning the headline (e.g. entrance mid-flight) first.
+                    releaseSplit();
+                    const split = new SplitText(nameRef.current, { type: 'chars', mask: 'chars' });
+                    activeSplitRef.current = split;
+                    tl.to(split.chars, {
+                        yPercent: -110,
                         duration: 0.55,
                         ease: 'power2.in',
-                        stagger: 0.045,
-                    }, 0.05)
-                    .set(heroRef.current, { display: 'none', pointerEvents: 'none' })
-                    .call(() => {
-                        if (activeSplitRef.current === split) releaseSplit();
-                    })
-                    .fromTo(chatRef.current,
-                        { opacity: 0, y: 26, scale: 0.985 },
-                        {
-                            display: 'flex', opacity: 1, y: 0, scale: 1,
-                            duration: 0.55, ease: 'agentOut', pointerEvents: 'all',
+                        stagger: { amount: 0.14, from: 'center' },
+                    }, 0)
+                        // The rest of the hero gets pulled into the jump — recede + fade.
+                        // Transform/opacity only: these elements include the command
+                        // palette with its live shine ring, and a `filter` tween would
+                        // re-rasterise all of it every frame, on top of the warp jump.
+                        .to('[data-hero-item]', {
+                            opacity: 0,
+                            y: -34,
+                            scale: 0.92,
+                            duration: 0.55,
+                            ease: 'power2.in',
+                            stagger: 0.045,
+                        }, 0.05)
+                        .set(heroRef.current, { display: 'none', pointerEvents: 'none' })
+                        .call(() => {
+                            if (activeSplitRef.current === split) releaseSplit();
                         })
-                    .fromTo(inputDockRef.current,
-                        { opacity: 0, y: 24 },
-                        { display: 'block', opacity: 1, y: 0, duration: 0.45, ease: 'agentOut' },
-                        '-=0.35')
-                    .call(flushPendingPrompt);
-            } else {
-                // lite / off — fast clean swap
-                const dur = tier === 'off' ? 0.01 : 0.35;
-                tl.to(heroRef.current, {
-                    opacity: 0, y: -16, duration: dur,
-                    pointerEvents: 'none', display: 'none',
-                })
-                    .to(chatRef.current, {
-                        display: 'flex', opacity: 1, y: 0,
-                        duration: dur, pointerEvents: 'all',
+                        .fromTo(chatRef.current,
+                            { opacity: 0, y: 26, scale: 0.985 },
+                            {
+                                display: 'flex', opacity: 1, y: 0, scale: 1,
+                                duration: 0.55, ease: 'agentOut', pointerEvents: 'all',
+                            })
+                        .fromTo(inputDockRef.current,
+                            { opacity: 0, y: 24 },
+                            { display: 'block', opacity: 1, y: 0, duration: 0.45, ease: 'agentOut' },
+                            '-=0.35')
+                        .call(flushPendingPrompt);
+                } else {
+                    // lite / off — fast clean swap
+                    const dur = tier === 'off' ? 0.01 : 0.35;
+                    tl.to(heroRef.current, {
+                        opacity: 0, y: -16, duration: dur,
+                        pointerEvents: 'none', display: 'none',
                     })
-                    .to(inputDockRef.current, { display: 'block', opacity: 1, duration: dur }, '<')
-                    .call(flushPendingPrompt);
-            }
+                        .to(chatRef.current, {
+                            display: 'flex', opacity: 1, y: 0,
+                            duration: dur, pointerEvents: 'all',
+                        })
+                        .to(inputDockRef.current, { display: 'block', opacity: 1, duration: dur }, '<')
+                        .call(flushPendingPrompt);
+                }
+            });
+
+            raf = requestAnimationFrame(build);
+            return () => {
+                cancelAnimationFrame(raf);
+                releaseHeavy();
+            };
         } else {
             // Initial mount: the entrance timeline owns the hero; chat is already hidden via CSS
             if (!wasStarted) return;

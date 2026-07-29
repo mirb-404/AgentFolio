@@ -37,16 +37,24 @@ const MagneticCursor: React.FC = () => {
             ringX(e.clientX); ringY(e.clientY);
         };
 
-        // Ring reacts to anything interactive
+        // Ring reacts to anything interactive.
+        // Only on an actual change of state: mouseover fires for every element
+        // the pointer crosses — and during the world transition, elements slide
+        // under a stationary cursor — so tweening unconditionally spawned a fresh
+        // tween many times a second for no visible difference.
+        let overInteractive: boolean | null = null;
         const onOver = (e: MouseEvent) => {
-            const interactive = (e.target as HTMLElement).closest(
+            const interactive = !!(e.target as HTMLElement).closest(
                 'button, a, input, textarea, [role="button"], [data-magnetic]'
             );
+            if (interactive === overInteractive) return;
+            overInteractive = interactive;
             gsap.to(ring, {
                 scale: interactive ? 2 : 1,
                 opacity: interactive ? 0.45 : 1,
                 duration: 0.32,
                 ease: 'power3.out',
+                overwrite: 'auto',
             });
         };
 

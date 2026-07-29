@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
-import { motionTier, hasFinePointer, isHidden } from '../lib/motion';
+import { motionTier, hasFinePointer, isHidden, isHeavyMoment } from '../lib/motion';
 
 interface AgenticBackgroundProps {
     /** Chat world dims the background so content leads */
@@ -183,6 +183,7 @@ const AgenticBackground: React.FC<AgenticBackgroundProps> = ({ dimmed }) => {
         }
 
         const clock = new THREE.Clock();
+        let halfFrame = false;
 
         const frame = () => {
             // Backgrounded tabs still get animation-loop callbacks in some
@@ -202,6 +203,15 @@ const AgenticBackground: React.FC<AgenticBackgroundProps> = ({ dimmed }) => {
             camera.position.x = mouse.x * 0.5;
             camera.position.y = 2.2 + mouse.y * 0.25;
             camera.lookAt(0, 0, 0);
+
+            // Under a warp jump the streaks own the screen and this layer is
+            // easing down to 0.3 anyway — half its refresh rate is invisible
+            // there, and hands the transition back a chunk of the frame.
+            // Uniforms above still advance, so it resumes in the right phase.
+            if (isHeavyMoment()) {
+                halfFrame = !halfFrame;
+                if (halfFrame) return;
+            }
 
             renderer.render(scene, camera);
         };

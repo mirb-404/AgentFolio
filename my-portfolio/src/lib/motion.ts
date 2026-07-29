@@ -60,6 +60,35 @@ export const hasFinePointer = () => {
 export const isHidden = () => typeof document !== 'undefined' && document.hidden;
 
 /**
+ * "Something expensive and deliberate is on screen right now" — the world
+ * transition and the warp jump.
+ *
+ * The frame budget is one pie. During those ~2 seconds the ambient layers are
+ * not what the visitor is looking at, so they stand down: the wave field halves
+ * its refresh and the decorative CSS spin loops park. Calls nest; the screen
+ * only relaxes once the last claim is released.
+ */
+let heavyDepth = 0;
+
+export function beginHeavyMoment(): () => void {
+    heavyDepth++;
+    if (heavyDepth === 1 && typeof document !== 'undefined') {
+        document.documentElement.classList.add('motion-quiet');
+    }
+    let released = false;
+    return () => {
+        if (released) return;
+        released = true;
+        heavyDepth = Math.max(0, heavyDepth - 1);
+        if (heavyDepth === 0 && typeof document !== 'undefined') {
+            document.documentElement.classList.remove('motion-quiet');
+        }
+    };
+}
+
+export const isHeavyMoment = () => heavyDepth > 0;
+
+/**
  * Fire a Physics2D particle burst at viewport coordinates.
  * Particles are appended to <body> and self-clean when the tween ends.
  */

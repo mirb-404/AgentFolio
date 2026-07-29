@@ -213,6 +213,15 @@ body, html {
   );
 }
 
+/* During the world transition / warp jump the decorative spin loops park.
+   Each one is a large composited layer being re-transformed every frame, and
+   for those ~2 seconds the budget belongs to the transition. */
+html.motion-quiet .blog-shine-wrap::before,
+html.motion-quiet .palette-shine-wrap::before,
+html.motion-quiet .animate-status-ping {
+  animation-play-state: paused;
+}
+
 /* Kill decorative CSS loops for users who opt out of motion */
 @media (prefers-reduced-motion: reduce) {
   .animate-status-ping { animation: none; }
