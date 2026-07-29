@@ -56,9 +56,9 @@ function renderInline(text: string): React.ReactNode {
   const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
   return parts.map((part, i) => {
     if (part.startsWith('**') && part.endsWith('**'))
-      return <mark key={i} className="font-semibold bg-amber-100 text-amber-900 px-1 py-px rounded-sm not-italic">{part.slice(2, -2)}</mark>;
+      return <mark key={i} className="font-semibold bg-amber-100 text-amber-900 px-1 py-px rounded-sm not-italic box-decoration-clone">{part.slice(2, -2)}</mark>;
     if (part.startsWith('`') && part.endsWith('`'))
-      return <code key={i} className="font-mono text-[12px] font-medium bg-blue-100 text-blue-800 rounded px-1.5 py-0.5 whitespace-nowrap">{part.slice(1, -1)}</code>;
+      return <code key={i} className="font-mono text-[12px] font-medium bg-blue-100 text-blue-800 rounded px-1.5 py-0.5 break-words box-decoration-clone">{part.slice(1, -1)}</code>;
     return part;
   });
 }
@@ -197,7 +197,7 @@ const BlogContent: React.FC<BlogContentProps> = ({
                 <span className="shrink-0 w-6 h-6 rounded-full bg-blue-100 border border-blue-200 text-blue-700 text-[11px] font-bold font-mono flex items-center justify-center mt-0.5">
                   {i + 1}
                 </span>
-                {renderInline(item)}
+                <span className="flex-1 min-w-0">{renderInline(item)}</span>
               </li>
             ))}
           </ol>
@@ -207,7 +207,7 @@ const BlogContent: React.FC<BlogContentProps> = ({
             {block.items.map((item, i) => (
               <li key={i} className="flex gap-3 text-[16px] sm:text-[17px] text-[#292929] leading-relaxed">
                 <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0 mt-[10px]" />
-                {renderInline(item)}
+                <span className="flex-1 min-w-0">{renderInline(item)}</span>
               </li>
             ))}
           </ul>
