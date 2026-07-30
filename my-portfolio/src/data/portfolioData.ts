@@ -13,7 +13,9 @@ import overwatchimg from '../assets/overwatch.png'
 import githubimg from '../assets/githubbg.png'
 import atsimg from '../assets/atsimg.png'
 import hadoopImg from '../assets/hadoop.png'
-import tenderflowImg from '../assets/preview_tender.png'
+import tenderflowImg from '../assets/tenderflowoutside.png'
+import omnicImg from '../assets/Omnicimg.png'
+import omnicDetailImg from '../assets/omnicimg2ext.png'
 
 // ===================================
 // Type Definitions
@@ -176,6 +178,8 @@ I'm also an avid Agentic Ai Researcher who is actively building industry grade a
             description: "An agentic vulnerability triage system that scans Python/npm lockfiles, container images, and SBOMs against NVD, CISA KEV, and OSV.dev, then sorts every match into escalated / confirmed / review_queue / rejected using a trained model with SHAP explanations. Runs fully offline in ~3.5s behind an MCP server, generates its own CycloneDX SBOMs, and never lets a lockfile enter the model's context. 223 tests at ~94% coverage.",
             link: "https://github.com/Yash-Annapure/IT_Security_Agent",
             docs: "https://github.com/Yash-Annapure/IT_Security_Agent/blob/main/Project_Documentation/project-documentation.md",
+            image: omnicImg,
+            detailImage: omnicDetailImg,
             techStack: ["Python", "MCP Server", "vLLM", "Qwen2.5-14B", "Scikit-learn", "SHAP", "CycloneDX / SPDX", "Syft", "NVD / CISA KEV / OSV.dev", "Cybersecurity"],
             isNew: true
         },

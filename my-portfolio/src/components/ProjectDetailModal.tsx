@@ -11,6 +11,8 @@ interface Project {
     link: string;
     docs?: string;
     image?: string;
+    /** Optional interior shot for the modal header; falls back to the card image */
+    detailImage?: string;
     techStack?: string[];
 }
 
@@ -90,7 +92,7 @@ const ProjectDetailModal: React.FC<ProjectDetailModalProps> = ({ project, onClos
                     <div
                         ref={imageRef}
                         className="absolute inset-0 bg-cover bg-center opacity-70"
-                        style={{ backgroundImage: `url(${project.image || 'https://grainy-gradients.vercel.app/noise.svg'})` }}
+                        style={{ backgroundImage: `url(${project.detailImage || project.image || 'https://grainy-gradients.vercel.app/noise.svg'})` }}
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-[#0f0f0f] via-[#0f0f0f]/40 to-transparent" />
                     {/* Cyan hairline along the image base */}
