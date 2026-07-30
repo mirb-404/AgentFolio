@@ -13,6 +13,7 @@ import overwatchimg from '../assets/overwatch.png'
 import githubimg from '../assets/githubbg.png'
 import atsimg from '../assets/atsimg.png'
 import hadoopImg from '../assets/hadoop.png'
+import tenderflowImg from '../assets/preview_tender.png'
 
 // ===================================
 // Type Definitions
@@ -59,7 +60,7 @@ export const portfolioData = {
     // --- Hero Stats (edit these freely) ---
     heroStats: [
         { value: '3', label: 'Companies' },
-        { value: '6+', label: 'Projects' },
+        { value: '8+', label: 'Projects' },
         { value: 'Mannheim', label: 'Location' },
     ],
 
@@ -168,6 +169,26 @@ I'm also an avid Agentic Ai Researcher who is actively building industry grade a
 
     // --- Projects ---
     projects: [
+        {
+            id: "omnic",
+            title: "Omnic",
+            category: "IT Security Agent",
+            description: "An agentic vulnerability triage system that scans Python/npm lockfiles, container images, and SBOMs against NVD, CISA KEV, and OSV.dev, then sorts every match into escalated / confirmed / review_queue / rejected using a trained model with SHAP explanations. Runs fully offline in ~3.5s behind an MCP server, generates its own CycloneDX SBOMs, and never lets a lockfile enter the model's context. 223 tests at ~94% coverage.",
+            link: "https://github.com/Yash-Annapure/IT_Security_Agent",
+            docs: "https://github.com/Yash-Annapure/IT_Security_Agent/blob/main/Project_Documentation/project-documentation.md",
+            techStack: ["Python", "MCP Server", "vLLM", "Qwen2.5-14B", "Scikit-learn", "SHAP", "CycloneDX / SPDX", "Syft", "NVD / CISA KEV / OSV.dev", "Cybersecurity"],
+            isNew: true
+        },
+        {
+            id: "tenderflow",
+            title: "TenderFlow",
+            category: "AI Tender Response Agent",
+            description: "An AI agent that turns a raw government RFP into a structured, source-cited first draft, cutting tender drafting from days to hours. A six-node LangGraph state machine analyses requirements, retrieves company knowledge through pgvector semantic search, drafts each section with model-routed Claude calls, and scores the result across 7 quality modules before pausing for human review. PostgreSQL checkpointing means the human-in-the-loop cycles survive restarts. Built at Q-Hack Mannheim in 24 hours: a ~€25k consultant submission for roughly €100 in tokens.",
+            link: "https://github.com/Yash-Annapure/TenderFlow",
+            image: tenderflowImg,
+            techStack: ["Python", "FastAPI", "LangGraph", "Claude Opus / Sonnet / Haiku", "Supabase", "pgvector", "PostgreSQL", "React", "Vite", "python-docx", "Agentic AI"],
+            isNew: true
+        },
         {
             id: "ats",
             title: "ATS",

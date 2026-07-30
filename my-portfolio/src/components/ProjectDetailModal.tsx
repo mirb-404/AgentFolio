@@ -1,7 +1,7 @@
 import React, { useRef } from 'react';
 import { useGSAP } from '@gsap/react';
 import { gsap, motionTier } from '../lib/motion';
-import { X, ExternalLink, Github, Layers } from 'lucide-react';
+import { X, ExternalLink, Github, Layers, BookOpen } from 'lucide-react';
 
 interface Project {
     id: string;
@@ -9,6 +9,7 @@ interface Project {
     category: string;
     description: string;
     link: string;
+    docs?: string;
     image?: string;
     techStack?: string[];
 }
@@ -136,17 +137,29 @@ const ProjectDetailModal: React.FC<ProjectDetailModalProps> = ({ project, onClos
                     )}
 
                     {/* Action Bar */}
-                    <div className="flex gap-3 pt-6 border-t border-[#1f1f1f]">
+                    <div className="flex flex-wrap gap-3 pt-6 border-t border-[#1f1f1f]">
                         <a
                             href={project.link}
                             target="_blank"
                             rel="noopener noreferrer"
                             data-magnetic
-                            className="flex-1 flex items-center justify-center gap-2 bg-[#22d3ee] hover:bg-[#67e8f9] text-[#0a0a0a] py-3 rounded-xl font-semibold text-sm transition-colors"
+                            className="flex-1 min-w-40 flex items-center justify-center gap-2 bg-[#22d3ee] hover:bg-[#67e8f9] text-[#0a0a0a] py-3 rounded-xl font-semibold text-sm transition-colors"
                         >
                             <ExternalLink size={16} />
                             Visit Live Site
                         </a>
+                        {project.docs && (
+                            <a
+                                href={project.docs}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                data-magnetic
+                                className="flex items-center justify-center gap-2 px-4 py-3 bg-[#141414] border border-[#262626] text-[#8a8a85] hover:text-[#f2f1ec] hover:border-[#22d3ee]/30 rounded-xl font-semibold text-sm transition-colors"
+                            >
+                                <BookOpen size={16} />
+                                Documentation
+                            </a>
+                        )}
                         <a
                             href={project.link}
                             target="_blank"
