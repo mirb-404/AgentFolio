@@ -7,6 +7,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#0a0a0a" />
 
+  <!-- Above-the-fold faces: start the font fetch with the HTML instead of
+       waiting for the stylesheet to parse. Both are variable, so these two
+       files cover every weight the site uses. -->
+  <link rel="preload" href="/fonts/Satoshi-Variable.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="/fonts/ClashDisplay-Variable.woff2" as="font" type="font/woff2" crossorigin />
+
   <title>AgentFolio</title>
   <meta name="description"
     content="An agentic portfolio. Talk to an AI agent about Mirang Bhandari's projects, skills, and experience — Software Engineer & AI Researcher based in Mannheim, Germany." />
