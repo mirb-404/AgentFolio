@@ -561,7 +561,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ tone, activePrompt, onPro
                     "Authorization": `Bearer ${apiKey}`
                 },
                 body: JSON.stringify({
-                    model: "llama-3.1-8b-instant",
+                    // llama-3.1-8b-instant was retired by Groq (404 model_not_found)
+                    model: "openai/gpt-oss-20b",
+                    reasoning_effort: "low",
                     messages: apiMessages,
                     tools: [githubActivityToolDefinition],
                     tool_choice: "auto",
