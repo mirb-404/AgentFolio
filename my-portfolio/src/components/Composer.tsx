@@ -1,4 +1,5 @@
-import React, { useLayoutEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { isHidden } from '../lib/motion';
 import { ArrowUp, Square } from 'lucide-react';
 
 interface ComposerProps {
@@ -6,18 +7,51 @@ interface ComposerProps {
     onStop: () => void;
     busy: boolean;
     autoFocus?: boolean;
-    placeholder?: string;
 }
 
 const MAX_HEIGHT = 200;
+
+// Shown one at a time in the empty composer, so visitors learn what they can ask
+const EXAMPLES = [
+    "What's your tech stack?",
+    'Show me your projects',
+    'Where have you worked?',
+    'Show me your résumé',
+    'Any certifications?',
+    'What are you building on GitHub?',
+    'What do you do outside of code?',
+    'How can I get in touch?',
+];
+const ROTATE_MS = 3500;
+const FADE_MS = 250;
+const canHover = typeof window !== 'undefined' && window.matchMedia('(hover: hover)').matches;
 
 /**
  * The composer owns its draft text — keeping it in ChatInterface would
  * re-render the whole transcript on every keystroke.
  */
-const Composer: React.FC<ComposerProps> = ({ onSend, onStop, busy, autoFocus, placeholder = 'Ask about projects, skills, experience…' }) => {
+const Composer: React.FC<ComposerProps> = ({ onSend, onStop, busy, autoFocus }) => {
     const [value, setValue] = useState('');
+    const [focused, setFocused] = useState(false);
+    const [hint, setHint] = useState(0);
+    const [hintVisible, setHintVisible] = useState(true);
     const ref = useRef<HTMLTextAreaElement>(null);
+    const empty = value === '';
+
+    // Cycle the example question — fade out, swap, fade in. Paused while typing.
+    useEffect(() => {
+        if (!empty) return;
+        let swap: number | undefined;
+        const tick = window.setInterval(() => {
+            if (isHidden()) return;
+            setHintVisible(false);
+            swap = window.setTimeout(() => {
+                setHint(i => (i + 1) % EXAMPLES.length);
+                setHintVisible(true);
+            }, FADE_MS);
+        }, ROTATE_MS);
+        return () => { window.clearInterval(tick); window.clearTimeout(swap); };
+    }, [empty]);
 
     // Grow with the text, up to a cap, then scroll
     useLayoutEffect(() => {
@@ -39,24 +73,47 @@ const Composer: React.FC<ComposerProps> = ({ onSend, onStop, busy, autoFocus, pl
             onClick={() => ref.current?.focus()}
             className="vt-composer w-full flex items-end gap-2 rounded-[28px] bg-composer border border-line dark:border-transparent shadow-[0_1px_6px_rgba(0,0,0,0.05)] pl-5 pr-2.5 py-2.5 cursor-text"
         >
-            <textarea
-                id="composer"
-                ref={ref}
-                rows={1}
-                value={value}
-                autoFocus={autoFocus}
-                onChange={(e) => setValue(e.target.value)}
-                onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-                        e.preventDefault();
-                        submit();
-                    }
-                }}
-                placeholder={placeholder}
-                aria-label="Message"
-                className="flex-1 resize-none bg-transparent outline-none text-base leading-6 py-1.5 text-fg placeholder:text-subtle"
-                style={{ maxHeight: MAX_HEIGHT }}
-            />
+            <div className="relative flex-1 min-w-0">
+                {/* Animated stand-in for the placeholder — a native one can't fade */}
+                {empty && (
+                    <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 flex items-center gap-2 py-1.5 text-base leading-6 text-subtle">
+                        <span
+                            className={`truncate transition-[opacity,transform] motion-reduce:transition-none ${hintVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-1'}`}
+                            style={{ transitionDuration: `${FADE_MS}ms` }}
+                        >
+                            Try “{EXAMPLES[hint]}”
+                        </span>
+                        {canHover && focused && (
+                            <kbd className="shrink-0 rounded border border-line px-1.5 text-[11px] leading-[18px] font-sans text-subtle">Tab</kbd>
+                        )}
+                    </div>
+                )}
+                <textarea
+                    id="composer"
+                    ref={ref}
+                    rows={1}
+                    value={value}
+                    autoFocus={autoFocus}
+                    onChange={(e) => setValue(e.target.value)}
+                    onFocus={() => setFocused(true)}
+                    onBlur={() => setFocused(false)}
+                    onKeyDown={(e) => {
+                        // Tab takes the example on show; with text in the box it moves focus as usual
+                        if (e.key === 'Tab' && !e.shiftKey && empty) {
+                            e.preventDefault();
+                            setValue(EXAMPLES[hint]);
+                            return;
+                        }
+                        if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                            e.preventDefault();
+                            submit();
+                        }
+                    }}
+                    aria-label="Message — ask about projects, skills, experience, or anything else"
+                    className="relative block w-full resize-none bg-transparent outline-none text-base leading-6 py-1.5 text-fg placeholder:text-subtle"
+                    style={{ maxHeight: MAX_HEIGHT }}
+                />
+            </div>
             {/* One button, two icons crossfading — Send ⇄ Stop never jumps */}
             <button
                 type={busy ? 'button' : 'submit'}
