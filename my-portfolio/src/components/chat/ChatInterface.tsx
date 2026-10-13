@@ -47,7 +47,7 @@ const SUGGESTIONS = [
 
 const WRITING = 'Writing response…';
 // Shown wherever a visitor can reach the model; keep in sync with api/chat.js logging
-const PRIVACY_NOTE = 'Questions answered by the AI are saved anonymously to improve this site.';
+const PRIVACY_NOTE = 'AI questions are saved anonymously.';
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 // rAF is suspended in background tabs — fall back to a timer so answers still land
@@ -662,7 +662,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ tone, activePrompt, onPro
                             onClick={jumpToBottom}
                             aria-label="Scroll to latest"
                             tabIndex={showJump ? 0 : -1}
-                            className={`absolute -top-12 left-1/2 -translate-x-1/2 size-9 grid place-items-center rounded-full border border-line bg-elevated text-muted hover:text-fg shadow-[0_2px_10px_rgba(0,0,0,0.1)] transition-[opacity,transform] duration-200 ${showJump ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'}`}
+                            className={`absolute -top-12 left-1/2 -translate-x-1/2 size-9 grid place-items-center rounded-full border border-line bg-elevated text-muted hover:text-fg shadow-[0_2px_10px_rgba(0,0,0,0.1)] transition-[opacity,translate,scale] duration-200 ${showJump ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'}`}
                         >
                             <ArrowDown size={16} />
                         </button>
@@ -673,12 +673,12 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ tone, activePrompt, onPro
                             autoFocus={canHover}
                             quota={quota}
                         />
-                        {/* The starter chips are gone by now — the footnote keeps the way back to the topic list */}
-                        <p className="py-2 text-center text-xs text-subtle">
-                            <button onClick={onBrowseTopics} className="hover:text-fg hover:underline underline-offset-2 transition-colors">
-                                Browse all topics
+                        {/* The starter chips are gone by now, so the note keeps a way back to the topic list */}
+                        <p className="py-2 text-center text-[11px] text-subtle">
+                            <button onClick={onBrowseTopics} className="underline underline-offset-2 hover:text-fg transition-colors">
+                                Browse topics (free)
                             </button>
-                            {' '}(free) · AI answers can be wrong; the résumé is the source of truth. {PRIVACY_NOTE}
+                            {' · AI answers can be wrong · '}{PRIVACY_NOTE}
                         </p>
                     </div>
                 </>

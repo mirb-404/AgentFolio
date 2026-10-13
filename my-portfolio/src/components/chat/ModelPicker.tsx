@@ -35,7 +35,7 @@ const ModelPicker: React.FC<{ tone: Tone; onChange: (t: Tone) => void }> = ({ to
             <div
                 role="menu"
                 inert={!open}
-                className={`absolute left-0 top-full mt-1.5 z-50 w-72 origin-top-left rounded-2xl border border-line bg-elevated p-1.5 shadow-[0_8px_30px_rgba(0,0,0,0.12)] transition-[opacity,transform,visibility] duration-150 ease-out ${open ? 'opacity-100 scale-100 translate-y-0 visible' : 'opacity-0 scale-[0.97] -translate-y-1 invisible'}`}
+                className={`absolute left-0 top-full mt-1.5 z-50 w-72 origin-top-left rounded-2xl border border-line bg-elevated p-1.5 shadow-[0_8px_30px_rgba(0,0,0,0.12)] transition-[opacity,translate,scale,visibility] duration-200 ease-[cubic-bezier(0.2,0.9,0.3,1)] ${open ? 'opacity-100 scale-100 translate-y-0 visible' : 'opacity-0 scale-[0.97] -translate-y-1 invisible'}`}
             >
                     {OPTIONS.map(opt => (
                         <button

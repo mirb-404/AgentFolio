@@ -58,7 +58,7 @@ const PoweredBy: React.FC = () => {
                 role="dialog"
                 aria-label="Models behind this chat"
                 inert={!open}
-                className={`absolute right-0 top-full mt-1.5 z-50 w-[min(18rem,calc(100vw-1.5rem))] origin-top-right rounded-2xl border border-line bg-elevated p-4 shadow-[0_8px_30px_rgba(0,0,0,0.12)] transition-[opacity,transform,visibility] duration-150 ease-out ${open ? 'opacity-100 scale-100 translate-y-0 visible' : 'opacity-0 scale-[0.97] -translate-y-1 invisible'}`}
+                className={`absolute right-0 top-full mt-1.5 z-50 w-[min(18rem,calc(100vw-1.5rem))] origin-top-right rounded-2xl border border-line bg-elevated p-4 shadow-[0_8px_30px_rgba(0,0,0,0.12)] transition-[opacity,translate,scale,visibility] duration-200 ease-[cubic-bezier(0.2,0.9,0.3,1)] ${open ? 'opacity-100 scale-100 translate-y-0 visible' : 'opacity-0 scale-[0.97] -translate-y-1 invisible'}`}
             >
                 <a href="https://groq.com" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-subtle hover:text-fg transition-colors">
                     <GroqBadge className="h-10" />

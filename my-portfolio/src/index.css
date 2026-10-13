@@ -251,7 +251,7 @@ textarea:focus-visible {
 /* Images fade in once decoded instead of popping in (see FadeImg) */
 img[data-fade] {
   opacity: 0;
-  transition: opacity 0.5s ease, transform 0.5s ease;
+  transition: opacity 0.5s ease, scale 0.5s ease, translate 0.5s ease, transform 0.5s ease;
 }
 img[data-fade][data-loaded] { opacity: 1; }
 

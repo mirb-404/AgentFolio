@@ -133,8 +133,8 @@ const Composer: React.FC<ComposerProps> = ({ onSend, onStop, busy, autoFocus, qu
                 aria-label={busy ? 'Stop generating' : 'Send message'}
                 className="relative size-9 shrink-0 rounded-full bg-fg text-bg grid place-items-center hover:opacity-80 disabled:opacity-20 disabled:cursor-default transition-opacity"
             >
-                <ArrowUp size={18} strokeWidth={2.25} className={`absolute transition-[opacity,transform] duration-200 ${busy ? 'opacity-0 scale-50' : 'opacity-100 scale-100'}`} />
-                <Square size={12} fill="currentColor" className={`absolute transition-[opacity,transform] duration-200 ${busy ? 'opacity-100 scale-100' : 'opacity-0 scale-50'}`} />
+                <ArrowUp size={18} strokeWidth={2.25} className={`absolute transition-[opacity,translate,scale] duration-200 ${busy ? 'opacity-0 scale-50' : 'opacity-100 scale-100'}`} />
+                <Square size={12} fill="currentColor" className={`absolute transition-[opacity,translate,scale] duration-200 ${busy ? 'opacity-100 scale-100' : 'opacity-0 scale-50'}`} />
             </button>
         </form>
     );

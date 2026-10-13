@@ -59,7 +59,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
             <aside
                 className={`fixed desk:relative inset-y-0 left-0 z-50 desk:z-auto shrink-0 overflow-hidden bg-panel border-r border-line
-                    w-[280px] transition-[transform,width] duration-300 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none
+                    w-[280px] transition-[translate,width] duration-300 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none
                     ${mobileOpen ? 'translate-x-0' : '-translate-x-full'} desk:translate-x-0
                     ${collapsed ? 'desk:w-0 desk:border-r-0' : 'desk:w-[260px]'}`}
                 aria-label="Sidebar"
@@ -107,7 +107,10 @@ const Sidebar: React.FC<SidebarProps> = ({
                         </nav>
                     </div>
 
-                    {/* Footer — socials, theme, and the "account" row */}
+                    {/* Footer: how the site was made, socials, theme, and the "account" row */}
+                    <p className="px-2.5 pb-2 text-[11px] leading-4 text-subtle">
+                        Hand-built from scratch, no site builders. Not affiliated with Groq.
+                    </p>
                     <div className="pt-2 border-t border-line">
                         <div className="flex items-center gap-0.5 px-1 py-1">
                             {portfolioData.socials.map(s => {
