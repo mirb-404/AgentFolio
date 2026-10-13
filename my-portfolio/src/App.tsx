@@ -56,6 +56,12 @@ function App() {
     setMobileOpen(false);
   }, []);
 
+  // Desktop: un-collapse the docked sidebar. Phones: slide the drawer in.
+  const handleBrowseTopics = useCallback(() => {
+    if (window.matchMedia('(min-width: 768px) and (min-height: 500px)').matches) setCollapsed(false);
+    else setMobileOpen(true);
+  }, []);
+
   const handleBlogOpen = useCallback((origin?: PortalOrigin) => {
     portalOriginRef.current = origin ?? null;
     setMobileOpen(false);
@@ -177,6 +183,7 @@ function App() {
             tone={tone}
             activePrompt={activePrompt}
             onPromptHandled={() => setActivePrompt(null)}
+            onBrowseTopics={handleBrowseTopics}
           />
         </main>
       </div>
