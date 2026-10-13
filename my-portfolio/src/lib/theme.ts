@@ -1,24 +1,22 @@
 import { useCallback, useEffect, useState } from 'react';
 import { flushSync } from 'react-dom';
 
-export type ThemePref = 'system' | 'light' | 'dark';
+export type ThemePref = 'light' | 'dark';
 export type RevealOrigin = { x: number; y: number };
 
 const KEY = 'agentfolio-theme';
-const META_COLORS = { light: '#ffffff', dark: '#212121' };
+const META_COLORS = { light: '#f7f7f5', dark: '#212121' };
 
+// Dark is the default; light only when the visitor has chosen it
 const readPref = (): ThemePref => {
     try {
-        const v = localStorage.getItem(KEY);
-        if (v === 'light' || v === 'dark') return v;
+        if (localStorage.getItem(KEY) === 'light') return 'light';
     } catch { /* storage blocked */ }
-    return 'system';
+    return 'dark';
 };
 
-const systemDark = () => window.matchMedia('(prefers-color-scheme: dark)').matches;
-
 function apply(pref: ThemePref) {
-    const dark = pref === 'dark' || (pref === 'system' && systemDark());
+    const dark = pref === 'dark';
     document.documentElement.classList.toggle('dark', dark);
     document.querySelector('meta[name="theme-color"]')
         ?.setAttribute('content', dark ? META_COLORS.dark : META_COLORS.light);
@@ -55,25 +53,17 @@ function revealTheme(update: () => void, origin?: RevealOrigin) {
 }
 
 /**
- * Light / dark / follow-the-system. index.html applies the stored choice
+ * Light / dark, dark by default. index.html applies the stored choice
  * before first paint; this hook keeps it in sync afterwards.
  */
 export function useTheme() {
     const [pref, setPref] = useState<ThemePref>(readPref);
 
-    useEffect(() => {
-        apply(pref);
-        if (pref !== 'system') return;
-        const mq = window.matchMedia('(prefers-color-scheme: dark)');
-        const onChange = () => apply('system');
-        mq.addEventListener('change', onChange);
-        return () => mq.removeEventListener('change', onChange);
-    }, [pref]);
+    useEffect(() => { apply(pref); }, [pref]);
 
     const update = useCallback((next: ThemePref, origin?: RevealOrigin) => {
         try {
-            if (next === 'system') localStorage.removeItem(KEY);
-            else localStorage.setItem(KEY, next);
+            localStorage.setItem(KEY, next);
         } catch { /* storage blocked */ }
         revealTheme(() => {
             apply(next);

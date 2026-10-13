@@ -40,13 +40,12 @@ const socialIcon = (name: string) =>
             name.includes('Twitter') ? Twitter :
                 name.includes('Email') || name.includes('Mail') ? Mail : ExternalLink;
 
-const row = 'w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-fg hover:bg-hover transition-colors text-left';
+const row = 'w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2.5 desk:py-2 text-[15px] desk:text-sm text-fg hover:bg-hover transition-colors text-left';
 
 const Sidebar: React.FC<SidebarProps> = ({
     collapsed, mobileOpen, onCollapse, onMobileClose, onNewChat, onPrompt, onBlog, theme, onThemeChange,
 }) => {
-    // Follows the system until the visitor picks; every click visibly flips
-    const isDark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    const isDark = theme === 'dark';
     const ThemeIcon = isDark ? Sun : Moon;
     const themeLabel = isDark ? 'Switch to light theme' : 'Switch to dark theme';
 
@@ -55,18 +54,18 @@ const Sidebar: React.FC<SidebarProps> = ({
             {/* Mobile backdrop */}
             <div
                 onClick={onMobileClose}
-                className={`md:hidden fixed inset-0 z-40 bg-black/40 transition-opacity duration-300 ${mobileOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+                className={`desk:hidden fixed inset-0 z-40 bg-black/40 transition-opacity duration-300 ${mobileOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
             />
 
             <aside
-                className={`fixed md:relative inset-y-0 left-0 z-50 md:z-auto shrink-0 overflow-hidden bg-panel border-r border-line
+                className={`fixed desk:relative inset-y-0 left-0 z-50 desk:z-auto shrink-0 overflow-hidden bg-panel border-r border-line
                     w-[280px] transition-[transform,width] duration-300 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none
-                    ${mobileOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0
-                    ${collapsed ? 'md:w-0 md:border-r-0' : 'md:w-[260px]'}`}
+                    ${mobileOpen ? 'translate-x-0' : '-translate-x-full'} desk:translate-x-0
+                    ${collapsed ? 'desk:w-0 desk:border-r-0' : 'desk:w-[260px]'}`}
                 aria-label="Sidebar"
             >
                 {/* Fixed inner width so content doesn't reflow while the panel animates */}
-                <div className="flex flex-col h-full w-[280px] md:w-[260px] p-2">
+                <div className="flex flex-col h-full w-[280px] desk:w-[260px] p-2 pt-[max(0.5rem,env(safe-area-inset-top))] pb-[max(0.5rem,env(safe-area-inset-bottom))]">
                     {/* Brand + collapse */}
                     <div className="flex items-center justify-between h-11 px-1.5 mb-1">
                         <button onClick={onNewChat} className="flex items-center gap-2 rounded-lg px-1 py-1 text-fg" title="AgentFolio — New chat">
@@ -74,12 +73,12 @@ const Sidebar: React.FC<SidebarProps> = ({
                             <span className="font-semibold text-[15px] tracking-[-0.02em]">AgentFolio</span>
                         </button>
                         <button
-                            onClick={() => window.matchMedia('(min-width: 768px)').matches ? onCollapse() : onMobileClose()}
-                            className="p-2 rounded-lg text-subtle hover:text-fg hover:bg-hover transition-colors"
+                            onClick={() => window.matchMedia('(min-width: 768px) and (min-height: 500px)').matches ? onCollapse() : onMobileClose()}
+                            className="p-2.5 desk:p-2 rounded-lg text-subtle hover:text-fg hover:bg-hover transition-colors"
                             aria-label="Close sidebar"
                         >
-                            <X size={18} className="md:hidden" />
-                            <PanelLeftClose size={18} className="hidden md:block" />
+                            <X size={18} className="desk:hidden" />
+                            <PanelLeftClose size={18} className="hidden desk:block" />
                         </button>
                     </div>
 
@@ -120,7 +119,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         title={s.name}
-                                        className="p-2 rounded-lg text-subtle hover:text-fg hover:bg-hover transition-colors"
+                                        className="p-2.5 desk:p-2 rounded-lg text-subtle hover:text-fg hover:bg-hover transition-colors"
                                     >
                                         <Icon size={16} />
                                     </a>
@@ -133,7 +132,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                                 }}
                                 title={themeLabel}
                                 aria-label={themeLabel}
-                                className="ml-auto p-2 rounded-lg text-subtle hover:text-fg hover:bg-hover transition-colors"
+                                className="ml-auto p-2.5 desk:p-2 rounded-lg text-subtle hover:text-fg hover:bg-hover transition-colors"
                             >
                                 <ThemeIcon size={16} />
                             </button>

@@ -67,7 +67,7 @@ const ContactForm: React.FC = () => {
         );
     }
 
-    const inputClass = 'w-full rounded-xl border border-line bg-bg px-3.5 py-2.5 text-[15px] text-fg placeholder:text-subtle focus:border-line-strong outline-none transition-colors disabled:opacity-50';
+    const inputClass = 'w-full rounded-xl border border-line bg-bg px-3.5 py-2.5 text-base text-fg placeholder:text-subtle focus:border-line-strong outline-none transition-colors disabled:opacity-50';
 
     return (
         <div className="w-full max-w-md rounded-2xl border border-line p-5">

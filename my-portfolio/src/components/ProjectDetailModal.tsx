@@ -45,7 +45,7 @@ const ProjectDetailModal: React.FC<ProjectDetailModalProps> = ({ project, onClos
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6" role="dialog" aria-modal aria-label={project.title}>
             <div className={`${closing ? 'fade-out' : 'fade-in'} absolute inset-0 bg-black/50`} onClick={close} />
 
-            <div className={`${closing ? 'pop-out' : 'pop-in'} relative w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden rounded-3xl bg-elevated border border-line shadow-[0_24px_60px_rgba(0,0,0,0.25)]`}>
+            <div className={`${closing ? 'pop-out' : 'pop-in'} relative w-full max-w-2xl max-h-[90dvh] flex flex-col overflow-hidden rounded-3xl bg-elevated border border-line shadow-[0_24px_60px_rgba(0,0,0,0.25)]`}>
                 <button
                     onClick={close}
                     className="absolute top-3 right-3 z-10 size-9 grid place-items-center rounded-full bg-black/40 text-white hover:bg-black/60 transition-colors"

@@ -15,7 +15,7 @@ const BlogSection = lazy(() => import('./components/BlogSection'));
 
 type PortalOrigin = { x: number; y: number };
 
-const iconBtn = 'p-2 rounded-lg text-muted hover:text-fg hover:bg-hover transition-colors';
+const iconBtn = 'p-2.5 desk:p-2 rounded-lg text-muted hover:text-fg hover:bg-hover transition-colors';
 
 function App() {
   const [theme, setTheme] = useTheme();
@@ -153,11 +153,11 @@ function App() {
         <main className="flex-1 min-w-0 flex flex-col">
           {/* Top bar */}
           <header className="h-14 shrink-0 flex items-center gap-1 px-2 sm:px-3">
-            <button onClick={() => setMobileOpen(true)} className={`md:hidden ${iconBtn}`} aria-label="Open sidebar">
+            <button onClick={() => setMobileOpen(true)} className={`desk:hidden ${iconBtn}`} aria-label="Open sidebar">
               <Menu size={20} />
             </button>
             {collapsed && (
-              <div className="fade-in hidden md:flex items-center gap-0.5">
+              <div className="fade-in hidden desk:flex items-center gap-0.5">
                 <button onClick={() => setCollapsed(false)} className={iconBtn} aria-label="Open sidebar" title="Open sidebar">
                   <PanelLeftOpen size={19} />
                 </button>
@@ -167,7 +167,7 @@ function App() {
               </div>
             )}
             <ModelPicker tone={tone} onChange={setTone} />
-            <button onClick={handleNewChat} className={`md:hidden ml-auto ${iconBtn}`} aria-label="New chat">
+            <button onClick={handleNewChat} className={`desk:hidden ml-auto ${iconBtn}`} aria-label="New chat">
               <SquarePen size={19} />
             </button>
           </header>

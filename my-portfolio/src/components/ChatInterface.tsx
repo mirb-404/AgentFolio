@@ -705,27 +705,31 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ tone, activePrompt, onPro
     return (
         <div className="flex-1 min-h-0 flex flex-col relative">
             {isEmpty ? (
-                /* ---- Empty state: greeting + centred composer ---- */
-                <div className="flex-1 flex flex-col items-center justify-center pb-[12vh]">
-                    {/* Same width + padding as the chat dock, so the composer only slides */}
-                    <div className="w-full max-w-[46rem] px-3 sm:px-6 flex flex-col items-center">
-                        <h1 className="fade-in text-[26px] sm:text-[30px] font-medium tracking-[-0.02em] text-fg text-center mb-7">
+                /* ---- Empty state ----
+                   Desktop: greeting, composer and chips centred as one group.
+                   Phones: greeting fills the space, chips sit in one swipeable
+                   row, composer docks at the bottom within thumb reach. */
+                <div className="flex-1 min-h-0 flex flex-col sm:justify-center sm:pb-[12vh]">
+                    <div className="flex-1 sm:flex-none flex items-center justify-center px-6 sm:mb-7">
+                        <h1 className="fade-in text-2xl sm:text-[30px] font-medium tracking-[-0.02em] text-fg text-center text-balance">
                             What would you like to know about Mirang?
                         </h1>
+                    </div>
+                    <div className="order-3 sm:order-none mx-auto w-full max-w-[46rem] px-3 sm:px-6 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:pb-0">
                         <Composer onSend={handleSendMessage} onStop={handleStop} busy={busy} autoFocus={canHover} />
-                        <div className="mt-4 flex flex-wrap justify-center gap-2">
-                            {SUGGESTIONS.map(({ label, prompt, Icon }, i) => (
-                                <button
-                                    key={label}
-                                    onClick={() => handleSendMessage(prompt)}
-                                    style={{ animationDelay: `${120 + i * 40}ms` }}
-                                    className="msg-in flex items-center gap-2 rounded-full border border-line px-3.5 py-2 text-sm text-muted hover:bg-hover hover:text-fg transition-colors"
-                                >
-                                    <Icon size={15} className="text-subtle" />
-                                    {label}
-                                </button>
-                            ))}
-                        </div>
+                    </div>
+                    <div className="scrollbar-hide mx-auto w-full max-w-[46rem] flex gap-2 overflow-x-auto px-3 pb-3 sm:pb-0 sm:mt-4 sm:px-6 sm:flex-wrap sm:justify-center sm:overflow-visible">
+                        {SUGGESTIONS.map(({ label, prompt, Icon }, i) => (
+                            <button
+                                key={label}
+                                onClick={() => handleSendMessage(prompt)}
+                                style={{ animationDelay: `${120 + i * 40}ms` }}
+                                className="msg-in shrink-0 flex items-center gap-2 rounded-full border border-line px-3.5 py-2.5 sm:py-2 text-sm text-muted hover:bg-hover hover:text-fg transition-colors"
+                            >
+                                <Icon size={15} className="text-subtle" />
+                                {label}
+                            </button>
+                        ))}
                     </div>
                 </div>
             ) : (
@@ -736,7 +740,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ tone, activePrompt, onPro
                         onWheel={(e) => { if (e.deltaY < 0) disengageFollow(); }}
                         onTouchStart={(e) => { touchStartYRef.current = e.touches[0].clientY; }}
                         onTouchMove={(e) => { if (e.touches[0].clientY > touchStartYRef.current + 8) disengageFollow(); }}
-                        className="flex-1 overflow-y-auto"
+                        className="flex-1 overflow-y-auto overscroll-contain"
                     >
                         <div ref={contentRef} className="mx-auto w-full max-w-[46rem] px-4 sm:px-6 pt-4 pb-10 flex flex-col gap-7">
                             {visibleMessages.map((msg) => (
@@ -754,7 +758,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ tone, activePrompt, onPro
                         </div>
                     </div>
 
-                    <div className="relative mx-auto w-full max-w-[46rem] px-3 sm:px-6 pb-2 bg-bg">
+                    <div className="relative mx-auto w-full max-w-[46rem] px-3 sm:px-6 pb-[env(safe-area-inset-bottom)] bg-bg">
                         {/* Scroll-to-latest — appears once you've scrolled away from the bottom */}
                         <button
                             onClick={jumpToBottom}
