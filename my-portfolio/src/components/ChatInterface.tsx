@@ -713,7 +713,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ tone, activePrompt, onPro
                    Desktop: greeting, composer and chips centred as one group.
                    Phones: greeting fills the space, chips sit in one swipeable
                    row, composer docks at the bottom within thumb reach. */
-                <div className="flex-1 min-h-0 flex flex-col sm:justify-center sm:pb-[12vh]">
+                <div className="relative isolate flex-1 min-h-0 flex flex-col sm:justify-center sm:pb-[12vh]">
+                    <div aria-hidden className="home-glow fade-in" />
                     <div className="flex-1 sm:flex-none flex items-center justify-center px-6 sm:mb-7">
                         <h1 className="fade-in text-2xl sm:text-[30px] font-medium tracking-[-0.02em] text-fg text-center text-balance">
                             What would you like to know about Mirang?

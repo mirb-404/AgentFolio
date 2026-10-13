@@ -94,6 +94,10 @@
   --muted: #45443f;
   --subtle: #66655f;
   --accent: #b4532f;
+  /* Home-screen glow: warm terracotta, periwinkle and blush */
+  --glow-1: rgba(255, 140, 90, 0.55);
+  --glow-2: rgba(120, 150, 255, 0.50);
+  --glow-3: rgba(255, 150, 200, 0.45);
   color-scheme: light;
 }
 
@@ -110,6 +114,10 @@
   --muted: #b4b4b4;
   --subtle: #8f8f8f;
   --accent: #d97757;
+  /* Brighter, more saturated hues than light mode — dull ones go muddy on #212121 */
+  --glow-1: rgba(255, 115, 75, 0.22);
+  --glow-2: rgba(85, 115, 255, 0.28);
+  --glow-3: rgba(190, 95, 255, 0.20);
   color-scheme: dark;
 }
 
@@ -294,4 +302,44 @@ html.theme-vt::view-transition-new(root) {
   .spark-live .spark-ray, .spark-live .spark-spin { animation: none; }
   img[data-fade] { opacity: 1; transition: none; }
   .shimmer-text { animation: none; color: var(--muted); background: none; }
+}
+
+/* Composer example roll — the outgoing line lifts away as the next one rises
+   into place; the overlap keeps the box from ever looking empty */
+@keyframes hint-in {
+  from { opacity: 0; transform: translateY(70%); filter: blur(3px); }
+  to { opacity: 1; transform: none; filter: none; }
+}
+@keyframes hint-out {
+  from { opacity: 1; transform: none; filter: none; }
+  to { opacity: 0; transform: translateY(-70%); filter: blur(3px); }
+}
+.hint-in { animation: hint-in 650ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+.hint-out { animation: hint-out 500ms cubic-bezier(0.55, 0, 0.75, 0.3) both; }
+@media (prefers-reduced-motion: reduce) {
+  .hint-in, .hint-out { animation-duration: 1ms; }
+}
+
+/* Gemini-style ambient glow behind the home screen only — static, blurred
+   colour washes that sit under the composer */
+.home-glow {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+.home-glow::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 48%;
+  width: min(1200px, 160%);
+  aspect-ratio: 5 / 2;
+  transform: translate(-50%, -50%);
+  background:
+    radial-gradient(closest-side at 30% 55%, var(--glow-1), transparent),
+    radial-gradient(closest-side at 70% 45%, var(--glow-2), transparent),
+    radial-gradient(closest-side at 50% 75%, var(--glow-3), transparent);
+  filter: blur(60px);
 }
