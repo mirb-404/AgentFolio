@@ -5,10 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "node scripts/knowledge-build.mjs && tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "resume:sync": "node scripts/resume-sync.mjs"
+    "resume:sync": "node scripts/resume-sync.mjs",
+    "questions": "node --env-file-if-exists=.env scripts/questions.mjs",
+    "kb": "node scripts/knowledge-build.mjs"
   },
   "dependencies": {
     "@emailjs/browser": "^4.4.1",

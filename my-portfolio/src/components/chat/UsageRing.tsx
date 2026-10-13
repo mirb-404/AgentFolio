@@ -126,6 +126,9 @@ const UsageRing: React.FC<{ quota: Quota }> = ({ quota }) => {
                         ? `Topic shortcuts still work.${reset ? ` Refills in ${reset}.` : ''}`
                         : <><span ref={countRef} className="tabular-nums" /> / {quota.limit.toLocaleString()} tokens{reset ? ` · resets in ${reset}` : ''}</>}
                 </p>
+                <p className="mt-2 pt-2 border-t border-line text-xs text-subtle">
+                    Topic buttons, and questions about projects, experience, skills, résumé, hobbies or GitHub, are always free.
+                </p>
             </div>
         </div>
     );

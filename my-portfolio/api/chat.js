@@ -10,12 +10,18 @@
  *   POST /api/chat  → streams the Groq SSE response, then one final
  *                     `data: {"quota": …}` event with the updated numbers
  *
+ * Every answered question is also logged (question + answer, no IP or
+ * visitor id) so the site owner can see what people ask the model —
+ * read them with `npm run questions`. Canned answers never reach this
+ * endpoint, so only questions that cost tokens are logged.
+ *
  * Usage is stored in Upstash Redis (Vercel Marketplace → Upstash for Redis,
  * which sets KV_REST_API_URL / KV_REST_API_TOKEN). Without it the counters
  * live in memory — fine for local dev, NOT enforced across serverless
  * instances in production.
  */
 import { createHash } from 'node:crypto';
+import { retrieve } from './_lib/knowledge.js';
 
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const MODEL = 'openai/gpt-oss-20b';
@@ -33,6 +39,10 @@ const REQS_PER_MIN = num(process.env.CHAT_IP_REQUESTS_PER_MIN, 8);
 
 const MAX_MESSAGES = 14;
 const MAX_CHARS = 24_000;
+
+// Question log: newest first, capped so it can't grow without bound
+const LOG_KEY = 'chat:questions';
+const LOG_MAX = 2000;
 
 // --- Storage ----------------------------------------------------------------
 
@@ -75,6 +85,16 @@ async function redis(commands) {
                 if (flag === 'NX' && hit.expiresAt !== Infinity) return 0;
                 hit.expiresAt = Date.now() + Number(arg) * 1000;
                 return 1;
+            }
+            case 'LPUSH': {
+                const list = hit ? hit.value : [];
+                list.unshift(arg);
+                memory.set(key, { value: list, expiresAt: Infinity });
+                return list.length;
+            }
+            case 'LTRIM': {
+                if (hit) hit.value = hit.value.slice(Number(arg), Number(flag) + 1);
+                return 'OK';
             }
             default: throw new Error(`unsupported ${cmd}`);
         }
@@ -143,6 +163,37 @@ async function overRequestRate(ipKey) {
     return count > REQS_PER_MIN;
 }
 
+const userQuestions = (messages) =>
+    messages.filter(m => m.role === 'user' && typeof m.content === 'string').map(m => m.content);
+
+/** The visitor's latest question — on a tool follow-up it's further back */
+const lastQuestion = (messages) => userQuestions(messages).at(-1) ?? '';
+
+/**
+ * Adds the profile sections relevant to the latest question as a second
+ * system message (see knowledge/ and api/_lib/knowledge.js). Done here rather
+ * than in the browser so the knowledge base never ships in the page bundle.
+ */
+function withProfileNotes(messages) {
+    const asked = userQuestions(messages);
+    const notes = retrieve(asked.at(-1) ?? '', asked.at(-2) ?? '');
+    if (!notes) return messages;
+    const note = {
+        role: 'system',
+        content: `PROFILE NOTES (verified facts about Mirang, retrieved for this question — prefer these over general knowledge, never contradict them, and never go beyond them):\n${notes}`,
+    };
+    const firstNonSystem = messages.findIndex(m => m.role !== 'system');
+    const at = firstNonSystem === -1 ? messages.length : firstNonSystem;
+    return [...messages.slice(0, at), note, ...messages.slice(at)];
+}
+
+/** Best-effort: a logging failure must never break the chat */
+async function logQuestion(question, answer, tokens) {
+    if (!question || process.env.CHAT_LOG_QUESTIONS === 'off') return;
+    const entry = JSON.stringify({ at: new Date().toISOString(), q: question.slice(0, 500), a: answer.slice(0, 2000), tokens });
+    await redis([['LPUSH', LOG_KEY, entry], ['LTRIM', LOG_KEY, 0, LOG_MAX - 1]]).catch(err => console.error('question log failed:', err));
+}
+
 // --- Helpers ----------------------------------------------------------------
 
 const json = (body, status = 200, headers = {}) =>
@@ -195,9 +246,11 @@ export async function POST(request) {
     }
     if (quota.exhausted) return json({ error: 'quota_exhausted', quota }, 429);
 
+    const prompt = withProfileNotes(messages);
+
     // Reserve the prompt cost now so concurrent requests see it; settled to
     // Groq's exact count once the stream ends
-    const reserved = estimateTokens(messages);
+    const reserved = estimateTokens(prompt);
     await charge(ipKey, reserved).catch(() => {});
 
     const upstream = await fetch(GROQ_URL, {
@@ -206,12 +259,13 @@ export async function POST(request) {
         body: JSON.stringify({
             model: MODEL,
             reasoning_effort: 'low',
-            messages,
+            messages: prompt,
             // Only the tools the site actually implements
             ...(Array.isArray(tools) && tools.length ? { tools: tools.slice(0, 2), tool_choice: 'auto' } : {}),
             stream: true,
             stream_options: { include_usage: true },
-            temperature: 0.7,
+            // Low temperature: answers should stick to the profile notes, not improvise
+            temperature: 0.4,
             max_tokens: MAX_OUTPUT_TOKENS,
         }),
         signal: request.signal,
@@ -231,23 +285,28 @@ export async function POST(request) {
         return json({ error: 'upstream_error' }, 502);
     }
 
-    // Pass every chunk straight through, watching for the usage block Groq
-    // sends at the end (`usage`, or `x_groq.usage` on older responses)
+    // Pass every chunk straight through, collecting the answer text and the
+    // usage block Groq sends at the end (`usage`, or `x_groq.usage` on older responses)
     const encoder = new TextEncoder();
     const decoder = new TextDecoder();
     let buffer = '';
     let actual = 0;
+    let answer = '';
+    let reasoningChars = 0;
 
     const watch = (text) => {
         buffer += text;
         const lines = buffer.split('\n');
         buffer = lines.pop() || '';
         for (const line of lines) {
-            if (!line.startsWith('data:') || !line.includes('usage')) continue;
+            if (!line.startsWith('data:') || line.includes('[DONE]')) continue;
             try {
                 const data = JSON.parse(line.slice(5).trim());
                 const usage = data.usage || data.x_groq?.usage;
                 if (usage?.total_tokens) actual = usage.total_tokens;
+                const delta = data.choices?.[0]?.delta;
+                answer += delta?.content || '';
+                reasoningChars += delta?.reasoning?.length || 0;
             } catch { /* partial or non-JSON line */ }
         }
     };
@@ -266,7 +325,7 @@ export async function POST(request) {
 
             // A stopped stream never gets its usage block — estimate what was
             // generated (plus hidden reasoning) so Stop can't dodge the meter
-            const cost = actual || reserved + Math.min(MAX_OUTPUT_TOKENS, Math.ceil(outputChars / 4) + 200);
+            const cost = actual || reserved + Math.min(MAX_OUTPUT_TOKENS, Math.ceil((answer.length + reasoningChars) / 4) + 200);
             try {
                 await charge(ipKey, cost - reserved);
                 const quota = await readQuota(ipKey);
@@ -274,6 +333,9 @@ export async function POST(request) {
             } catch (err) {
                 console.error('quota settle failed:', err);
             }
+            // Before closing: work after the response ends may be cut off on Vercel.
+            // A turn that only asked for a tool has no text; the follow-up logs it.
+            if (answer) await logQuestion(lastQuestion(messages), answer, cost);
             try { controller.close(); } catch { /* already closed */ }
         },
     });

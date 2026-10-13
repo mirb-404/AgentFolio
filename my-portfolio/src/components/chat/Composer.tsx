@@ -4,6 +4,7 @@ import { canHover } from '../../lib/dom';
 import { ArrowUp, Square } from 'lucide-react';
 import UsageRing from './UsageRing';
 import type { Quota } from '../../lib/quota';
+import { getPredefinedResponse } from '../../lib/cannedAnswers';
 
 interface ComposerProps {
     onSend: (text: string) => void;
@@ -39,6 +40,8 @@ const Composer: React.FC<ComposerProps> = ({ onSend, onStop, busy, autoFocus, qu
     const [{ hint, prev, turn }, setRoll] = useState({ hint: 0, prev: -1, turn: 0 });
     const ref = useRef<HTMLTextAreaElement>(null);
     const empty = value === '';
+    // Same rules the chat uses, so this is exactly what will happen on send
+    const free = value.trim() !== '' && getPredefinedResponse(value) !== null;
 
     // Roll to the next example — outgoing and incoming overlap, so there's no blank beat.
     // Paused while typing, and while the tab is in the background.
@@ -112,6 +115,13 @@ const Composer: React.FC<ComposerProps> = ({ onSend, onStop, busy, autoFocus, qu
                     style={{ maxHeight: MAX_HEIGHT }}
                 />
             </div>
+            <span
+                title="Answered instantly from Mirang's profile — doesn't use your AI allowance"
+                aria-hidden={!free}
+                className={`h-9 shrink-0 flex items-center transition-opacity duration-200 ${free ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+            >
+                <span className="rounded-full border border-line px-2 py-0.5 text-xs text-subtle">Free</span>
+            </span>
             {quota && <UsageRing quota={quota} />}
             {/* One button, two icons crossfading — Send ⇄ Stop never jumps */}
             <button

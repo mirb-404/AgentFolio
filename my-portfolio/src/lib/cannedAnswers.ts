@@ -1,4 +1,5 @@
 import { portfolioData } from '../data/portfolioData';
+import { smallTalkReply, isSmallTalkReply } from './smallTalk';
 
 /**
  * Canned answers: common questions are matched by keyword and answered from
@@ -13,6 +14,10 @@ export const getPredefinedResponse = (input: string): string | null => {
     if (normalizedInput === 'help') {
         return `A few things you can type:\n\n- \`clear\` — start over\n- \`matrix\` — you'll see`;
     }
+
+    // Before the keyword rules, so "nice work!" is a compliment, not a request for work history
+    const chat = smallTalkReply(input);
+    if (chat) return chat;
 
     if (
         normalizedInput.includes("tell me about yourself") ||
@@ -103,6 +108,7 @@ export const getPredefinedResponse = (input: string): string | null => {
 
 /** The visible steps for a canned answer, keyed off the widget it renders */
 export const planFor = (response: string): string[] => {
+    if (isSmallTalkReply(response)) return []; // a "hi" back needs no thinking
     const { projects, experience, skills, certifications } = portfolioData;
     if (response.includes('{{PROJECTS}}')) return ['Searching projects…', `Found ${projects.length} projects`];
     if (response.includes('{{EXPERIENCE}}')) return ['Looking up work history…', `${experience.length} roles found`];
@@ -114,3 +120,21 @@ export const planFor = (response: string): string[] => {
     if (response.includes('{{RESUME}}')) return ['Fetching résumé…'];
     return ['Searching knowledge base…'];
 };
+
+// Which visitor wording justifies each widget the model may append
+const WIDGET_TOPICS: Record<string, RegExp> = {
+    '{{PROJECTS}}': /project|built|build|portfolio|made|work on|working on/i,
+    '{{SKILLS}}': /skill|stack|tech|tool|language|framework|know|experience with|familiar/i,
+    '{{RESUME}}': /r[ée]sum[ée]|\bcv\b/i,
+    '{{HOBBIES}}': /hobb|interest|free time|outside (of )?(work|code)|fun/i,
+};
+
+/**
+ * The model sometimes tacks a widget onto answers that don't need one (a
+ * skills grid under "hi!"). Keep a model-added tag only when the visitor's
+ * question was about that topic. {{GITHUB}} is left alone — the GitHub tool
+ * flow adds it deliberately.
+ */
+export const keepRelevantWidgets = (answer: string, question: string): string =>
+    answer.replace(/\n*\{\{(PROJECTS|SKILLS|RESUME|HOBBIES)\}\}/g, (tag, name) =>
+        WIDGET_TOPICS[`{{${name}}}`].test(question) ? tag : '');

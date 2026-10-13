@@ -26,6 +26,8 @@ chat, GitHub widgets and token quota work locally exactly as in production.
 | `npm run build` | Typecheck + production build to `dist/` |
 | `npm run lint` | ESLint |
 | `npm run resume:sync` | Pull the latest résumé PDF from Google Drive and re-render previews |
+| `npm run kb` | Recompile `knowledge/*.md` into the sections the chat retrieves from (dev and build do this automatically) |
+| `npm run questions` | Show what visitors asked the AI (needs the Upstash vars in `.env`) |
 
 ## How a message is answered
 
@@ -33,7 +35,8 @@ chat, GitHub widgets and token quota work locally exactly as in production.
 2. **Canned answers** — keyword rules in `src/lib/cannedAnswers.ts` return text
    with `{{TAGS}}` such as `{{PROJECTS}}`; `ChatMessage.tsx` swaps each tag for
    its widget. No tokens are spent.
-3. **The model** — everything else is streamed from `POST /api/chat`. The
+3. **The model** — everything else is streamed from `POST /api/chat`, which first adds the
+   few sections of `knowledge/profile.md` that match the question (keyword retrieval, ~500 tokens). The
    system prompt is in `src/lib/systemPrompt.ts`; the model can call one tool,
    `fetch_github_activity` (`src/lib/githubTool.ts` → `GET /api/github`).
 
@@ -46,6 +49,8 @@ api/                     Vercel serverless functions (each file = one route)
   github-stats.js        GitHub profile numbers for the widget
   github-summary.js      Model-written activity summary, CDN-cached 6h
   _lib/github.js         Shared GitHub fetching (the "_" keeps it from becoming a route)
+  _lib/knowledge.js      Picks the profile sections relevant to each question (keyword/BM25)
+  _lib/knowledge-data.js GENERATED from knowledge/ — don't edit
 
 src/
   App.tsx                Layout shell: sidebar, header, chat, blog overlay
@@ -76,6 +81,7 @@ src/
   content/blog/          Blog posts as Markdown (see its README)
   assets/                Images (any file here can be referenced from blog posts by name)
 
+knowledge/profile.md     What the AI knows about Mirang — public-safe, one topic per "## " section
 public/                  Served as-is: favicons, fonts, profile photo
 scripts/resume-sync.mjs  Résumé sync script
 ```
@@ -85,7 +91,8 @@ scripts/resume-sync.mjs  Résumé sync script
 - **Portfolio content** (bio, projects, experience, skills…) → `src/data/portfolioData.ts`
 - **Blog post** → add a `.md` file to `src/content/blog/` (guide in that folder's README)
 - **Canned answers / keywords** → `src/lib/cannedAnswers.ts`
-- **What the model knows / how it talks** → `src/lib/systemPrompt.ts`, `src/lib/tone.ts`
+- **What the model knows** → `knowledge/profile.md` (facts; only relevant sections are sent per question)
+- **How the model talks** → `src/lib/systemPrompt.ts`, `src/lib/tone.ts`
 - **Colours** → the tokens at the top of `src/index.css`
 
 ## Environment variables

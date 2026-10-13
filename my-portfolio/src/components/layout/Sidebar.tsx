@@ -94,7 +94,10 @@ const Sidebar: React.FC<SidebarProps> = ({
 
                     {/* Topics */}
                     <div className="mt-6 flex-1 min-h-0 overflow-y-auto">
-                        <h3 className="px-2.5 pb-1.5 text-xs font-medium text-subtle">Explore</h3>
+                        <h3 className="px-2.5 pb-1.5 flex items-baseline justify-between text-xs font-medium text-subtle">
+                            Explore
+                            <span className="font-normal" title="Topics are answered instantly and never use your AI allowance">free · no tokens</span>
+                        </h3>
                         <nav className="flex flex-col">
                             {TOPICS.map(t => (
                                 <button key={t.label} onClick={() => onPrompt(t.prompt)} className={`${row} truncate`}>

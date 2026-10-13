@@ -8,7 +8,7 @@ import ContactForm from '../widgets/ContactForm';
 import { ThinkingIndicator, type Trace } from './Thinking';
 import type { Tone } from '../../lib/tone';
 import { buildSystemPrompt } from '../../lib/systemPrompt';
-import { getPredefinedResponse, planFor } from '../../lib/cannedAnswers';
+import { getPredefinedResponse, planFor, keepRelevantWidgets } from '../../lib/cannedAnswers';
 import { canHover } from '../../lib/dom';
 import type { Project } from '../../data/portfolioData';
 import { githubActivityToolDefinition, fetchGithubActivity } from '../../lib/githubTool';
@@ -46,6 +46,8 @@ const SUGGESTIONS = [
 ];
 
 const WRITING = 'Writing response…';
+// Shown wherever a visitor can reach the model; keep in sync with api/chat.js logging
+const PRIVACY_NOTE = 'Questions answered by the AI are saved anonymously to improve this site.';
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 // rAF is suspended in background tabs — fall back to a timer so answers still land
@@ -506,7 +508,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ tone, activePrompt, onPro
                             const trace = snapshotTrace(true);
                             setMessages(prev => [...prev, { id, role: 'agent', content: '', isStreaming: true, trace }]);
                         }
-                        writer!.push(fullContent);
+                        writer!.push(keepRelevantWidgets(fullContent, input));
                     } catch (e) {
                         console.error("Error parsing stream chunk, skipped:", e, "Raw string:", line);
                     }
@@ -549,9 +551,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ tone, activePrompt, onPro
 
             // The model sometimes forgets the {{GITHUB}} tag after using the tool
             const usedGithubTool = currentMessages.some(m => m.role === 'tool' && m.name === 'fetch_github_activity');
-            const finalOutput = usedGithubTool && !fullContent.includes('{{GITHUB}}')
-                ? fullContent + "\n\n{{GITHUB}}"
-                : fullContent;
+            const answer = keepRelevantWidgets(fullContent, input);
+            const finalOutput = usedGithubTool && !answer.includes('{{GITHUB}}')
+                ? answer + "\n\n{{GITHUB}}"
+                : answer;
 
             if (msgId) {
                 const id = msgId;
@@ -619,9 +622,12 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ tone, activePrompt, onPro
                     >
                         <ArrowLeft size={13} className="hidden desk:block" />
                         <Menu size={13} className="desk:hidden" />
-                        <span className="hidden desk:inline">More topics in the sidebar — skills, certifications, résumé…</span>
-                        <span className="desk:hidden">Tap here for all topics — skills, résumé, hobbies…</span>
+                        <span className="hidden desk:inline">More topics in the sidebar — all free, no tokens</span>
+                        <span className="desk:hidden">Tap here for all topics — free, no tokens</span>
                     </button>
+                    <p className="order-4 sm:order-none mx-auto mb-2 sm:mb-0 sm:mt-3 px-6 text-center text-[11px] text-subtle">
+                        {PRIVACY_NOTE}
+                    </p>
                 </div>
             ) : (
                 <>
@@ -671,7 +677,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ tone, activePrompt, onPro
                             <button onClick={onBrowseTopics} className="hover:text-fg hover:underline underline-offset-2 transition-colors">
                                 Browse all topics
                             </button>
-                            {' '}· AgentFolio can make mistakes. The résumé is the source of truth.
+                            {' '}(free) · AI answers can be wrong — the résumé is the source of truth. {PRIVACY_NOTE}
                         </p>
                     </div>
                 </>

@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { Readable } from 'node:stream'
 import { existsSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 
 type NodeRes = ServerResponse & { status: (code: number) => NodeRes; json: (body: unknown) => void }
@@ -17,6 +18,15 @@ type NodeRes = ServerResponse & { status: (code: number) => NodeRes; json: (body
 const apiRoutes = (): Plugin => ({
   name: 'api-routes',
   configureServer(server) {
+    // Recompile knowledge/*.md into api/_lib/knowledge-data.js now and on every edit
+    const buildKnowledge = () => {
+      try { execFileSync(process.execPath, ['scripts/knowledge-build.mjs'], { cwd: server.config.root, stdio: 'ignore' }) }
+      catch (err) { server.config.logger.error(`[knowledge] ${err}`) }
+    }
+    buildKnowledge()
+    server.watcher.add(`${server.config.root}/knowledge`)
+    server.watcher.on('change', (file) => { if (/[\\/]knowledge[\\/].+\.md$/.test(file)) buildKnowledge() })
+
     server.middlewares.use('/api', async (req: IncomingMessage, res: ServerResponse, next) => {
       const url = new URL(req.url ?? '/', 'http://localhost')
       const name = url.pathname.replace(/^\/+|\/+$/g, '')
