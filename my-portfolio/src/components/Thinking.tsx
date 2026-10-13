@@ -1,38 +1,76 @@
 import React, { useEffect, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
-import { motionTier } from '../lib/motion';
 import Collapse from './Collapse';
 
 export type Trace = { steps: string[]; ms: number };
 
-// Grows from a dot to a full star and back — ping-pong so it never "jumps"
-const GLYPHS = ['·', '✢', '✳', '✶', '✻', '✽'];
-const FRAMES = [...GLYPHS, ...GLYPHS.slice(1, -1).reverse()];
-const TEXT_VS = '︎';
+const RAYS = Array.from({ length: 8 }, (_, i) => i * 45);
+// Tapered petals pointing up from the centre: straight rays reach further than diagonals
+const LONG_RAY = 'M12 1.6C13.45 5 13.45 8.7 12 12C10.55 8.7 10.55 5 12 1.6Z';
+const SHORT_RAY = 'M12 4C13.2 6.6 13.2 9.4 12 12C10.8 9.4 10.8 6.6 12 4Z';
 
-export const Spinner: React.FC<{ className?: string }> = ({ className = '' }) => {
-    const [frame, setFrame] = useState(4);
+/**
+ * The spark: straight and diagonal petals pulse in opposition — plus, star,
+ * cross, star — while the mark turns slowly. Always symmetric, so it reads
+ * as one deliberate shape breathing rather than a jitter. SVG, not text
+ * glyphs, so it's identical on every OS; animated with CSS transforms only.
+ */
+export const Spark: React.FC<{ size?: number; animated?: boolean; className?: string }> = ({ size = 16, animated = true, className = '' }) => (
+    <svg
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        aria-hidden
+        className={`shrink-0 overflow-visible ${animated ? 'spark-live' : ''} ${className}`}
+    >
+        <g className="spark-spin" fill="currentColor">
+            {RAYS.map((deg, i) => (
+                <g key={deg} transform={`rotate(${deg} 12 12)`}>
+                    <path d={i % 2 ? SHORT_RAY : LONG_RAY} className={`spark-ray ${i % 2 ? 'spark-ray-b' : ''}`} />
+                </g>
+            ))}
+            <circle cx="12" cy="12" r="1.5" />
+        </g>
+    </svg>
+);
 
+/** Kept for callers that want the live spinner by name */
+export const Spinner: React.FC<{ className?: string }> = ({ className = '' }) => (
+    <Spark size={19} className={`text-accent ${className}`} />
+);
+
+/** Seconds since mount, ticking once a second */
+function useElapsed() {
+    const [start] = useState(() => performance.now());
+    const [secs, setSecs] = useState(0);
     useEffect(() => {
-        if (motionTier() === 'off') return;
-        const id = window.setInterval(() => setFrame(f => (f + 1) % FRAMES.length), 120);
+        const id = window.setInterval(() => setSecs(Math.floor((performance.now() - start) / 1000)), 1000);
         return () => window.clearInterval(id);
-    }, []);
+    }, [start]);
+    return secs;
+}
 
+/**
+ * Live state while the agent works: spark + shimmering step label. Each new
+ * step slides up into place; a quiet seconds counter appears if it runs long.
+ */
+export const ThinkingIndicator: React.FC<{ label: string }> = ({ label }) => {
+    const secs = useElapsed();
     return (
-        <span aria-hidden className={`spinner-glyph text-accent ${className}`}>
-            {FRAMES[frame]}{TEXT_VS}
-        </span>
+        <div role="status" aria-live="polite" className="msg-in h-7 flex items-center gap-2.5 text-[15px]">
+            <Spinner />
+            <span className="relative overflow-hidden">
+                <span key={label} className="step-in block shimmer-text">{label}</span>
+            </span>
+            <span
+                aria-hidden
+                className={`text-sm text-subtle tabular-nums transition-opacity duration-500 ${secs >= 3 ? 'opacity-100' : 'opacity-0'}`}
+            >
+                {secs}s
+            </span>
+        </div>
     );
 };
-
-/** Live state while the agent works: spinner + shimmering step label */
-export const ThinkingIndicator: React.FC<{ label: string }> = ({ label }) => (
-    <div role="status" aria-live="polite" className="msg-in flex items-center gap-2.5 text-[15px] leading-7">
-        <Spinner className="text-[17px]" />
-        <span key={label} className="shimmer-text fade-in">{label}</span>
-    </div>
-);
 
 const stripEllipsis = (s: string) => s.replace(/…$/, '');
 
@@ -49,8 +87,10 @@ export const ThoughtSummary: React.FC<{ trace: Trace }> = ({ trace }) => {
                 type="button"
                 onClick={() => setOpen(o => !o)}
                 aria-expanded={open}
-                className="h-7 inline-flex items-center gap-1 text-sm text-subtle hover:text-fg transition-colors"
+                className="h-7 inline-flex items-center gap-1.5 text-sm text-subtle hover:text-fg transition-colors"
             >
+                {/* The spinner, at rest — same mark, same spot, so the hand-off reads as continuous */}
+                <Spark size={14} animated={false} className="text-accent/80" />
                 Thought for {seconds}s
                 <ChevronRight size={14} className={`transition-transform duration-300 ease-[cubic-bezier(0.2,0,0,1)] ${open ? 'rotate-90' : ''}`} />
             </button>
