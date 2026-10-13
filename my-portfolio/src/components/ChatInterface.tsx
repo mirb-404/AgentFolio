@@ -788,7 +788,6 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ tone, activePrompt, onPro
                             onStop={handleStop}
                             busy={busy}
                             autoFocus={canHover}
-                            placeholder='Ask a follow-up, or try "skills", "résumé"…'
                         />
                         {/* The starter chips are gone by now — the footnote keeps the way back to the topic list */}
                         <p className="py-2 text-center text-xs text-subtle">
