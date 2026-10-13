@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import emailjs from '@emailjs/browser';
-import { Mail, Send, AlertCircle, CheckCircle, ExternalLink } from 'lucide-react';
+import { AlertCircle, CheckCircle2, ArrowUpRight } from 'lucide-react';
 
 const ContactForm: React.FC = () => {
     const form = useRef<HTMLFormElement>(null);
@@ -51,94 +51,51 @@ const ContactForm: React.FC = () => {
         } catch (error: any) {
             console.error('EmailJS Error:', error);
             setStatus('error');
-            setErrorMessage("Could not send your message. Please try the alternate form below.");
+            setErrorMessage("Couldn't send your message. Try the alternate form instead.");
         }
     };
 
     if (status === 'success') {
         return (
-            <div className="bg-[#0d0d0d] border border-green-500/15 rounded-2xl p-6 text-center w-full max-w-md">
-                <div className="w-10 h-10 rounded-xl border border-green-500/20 bg-green-500/5 flex items-center justify-center mx-auto mb-4">
-                    <CheckCircle size={18} className="text-green-400" />
+            <div className="w-full max-w-md rounded-2xl border border-line p-5 flex items-center gap-3">
+                <CheckCircle2 size={20} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <div>
+                    <h3 className="text-[15px] font-medium text-fg">Message sent</h3>
+                    <p className="text-sm text-muted">I'll get back to you soon.</p>
                 </div>
-                <h3 className="text-sm font-bold text-white font-display tracking-wider mb-1">Message Sent</h3>
-                <p className="text-xs text-[#585858]">I'll get back to you soon.</p>
             </div>
         );
     }
 
-    const inputClass = `w-full bg-[#080808] border border-[#1e1e1e] rounded-xl px-3 py-2.5 text-sm text-[#e0e0e0] placeholder:text-[#363636] focus:border-blue-500/30 focus:ring-1 focus:ring-blue-500/8 outline-none transition-all disabled:opacity-40 disabled:cursor-not-allowed`;
+    const inputClass = 'w-full rounded-xl border border-line bg-bg px-3.5 py-2.5 text-base text-fg placeholder:text-subtle focus:border-line-strong outline-none transition-colors disabled:opacity-50';
 
     return (
-        <div className="bg-[#0d0d0d] border border-[#191919] rounded-2xl p-5 w-full max-w-md">
-
-            {/* Header */}
-            <div className="flex items-center gap-3 mb-5">
-                <div className="w-8 h-8 rounded-xl border border-[#222] bg-[#111] flex items-center justify-center shrink-0">
-                    <Mail size={14} className="text-[#585858]" />
-                </div>
-                <div>
-                    <h3 className="text-[13px] font-display tracking-wider text-white">Get In Touch</h3>
-                    <p className="text-[11px] text-[#484848] font-mono mt-0.5">Usually replies within 24h</p>
-                </div>
-            </div>
+        <div className="w-full max-w-md rounded-2xl border border-line p-5">
+            <h3 className="text-[15px] font-medium text-fg">Get in touch</h3>
+            <p className="text-sm text-muted mb-4">Usually replies within a day.</p>
 
             <form ref={form} onSubmit={sendEmail} className="space-y-2.5">
                 {/* Honeypot */}
                 <div className="hidden">
-                    <input
-                        type="text"
-                        name="website"
-                        value={formData.website}
-                        onChange={handleChange}
-                        tabIndex={-1}
-                        autoComplete="off"
-                    />
+                    <input type="text" name="website" value={formData.website} onChange={handleChange} tabIndex={-1} autoComplete="off" />
                 </div>
 
-                <input
-                    type="text"
-                    name="user_name"
-                    placeholder="Your name"
-                    value={formData.user_name}
-                    onChange={handleChange}
-                    className={inputClass}
-                    disabled={status === 'sending'}
-                />
-
-                <input
-                    type="email"
-                    name="user_email"
-                    placeholder="your@email.com"
-                    value={formData.user_email}
-                    onChange={handleChange}
-                    className={inputClass}
-                    disabled={status === 'sending'}
-                />
-
-                <textarea
-                    name="message"
-                    placeholder="What's on your mind?"
-                    rows={4}
-                    value={formData.message}
-                    onChange={handleChange}
-                    className={`${inputClass} resize-none`}
-                    disabled={status === 'sending'}
-                />
+                <input type="text" name="user_name" placeholder="Your name" value={formData.user_name} onChange={handleChange} className={inputClass} disabled={status === 'sending'} />
+                <input type="email" name="user_email" placeholder="you@email.com" value={formData.user_email} onChange={handleChange} className={inputClass} disabled={status === 'sending'} />
+                <textarea name="message" placeholder="What's on your mind?" rows={4} value={formData.message} onChange={handleChange} className={`${inputClass} resize-none`} disabled={status === 'sending'} />
 
                 {status === 'error' && (
-                    <div className="flex items-start gap-2.5 bg-red-500/5 border border-red-500/15 rounded-xl p-3 text-xs">
-                        <AlertCircle size={13} className="mt-0.5 shrink-0 text-red-400/80" />
-                        <div className="flex-1">
-                            <p className="text-red-400/80 mb-2">{errorMessage}</p>
+                    <div className="flex items-start gap-2 text-sm text-red-600 dark:text-red-400">
+                        <AlertCircle size={15} className="mt-0.5 shrink-0" />
+                        <div>
+                            <p>{errorMessage}</p>
                             <a
                                 href="https://mirang.framer.ai/form-submit"
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1.5 text-[11px] text-[#686868] hover:text-white border border-[#242424] hover:border-[#333] px-2.5 py-1 rounded-lg transition-all"
+                                className="inline-flex items-center gap-1 mt-1 text-muted hover:text-fg underline underline-offset-2"
                             >
-                                Try alternate form
-                                <ExternalLink size={10} />
+                                Alternate form <ArrowUpRight size={13} />
                             </a>
                         </div>
                     </div>
@@ -147,19 +104,10 @@ const ContactForm: React.FC = () => {
                 <button
                     type="submit"
                     disabled={status === 'sending'}
-                    className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-30 disabled:cursor-not-allowed text-white font-semibold text-sm py-2.5 rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-2 mt-1"
+                    className="w-full rounded-full bg-fg text-bg py-2.5 text-sm font-medium hover:opacity-85 disabled:opacity-40 transition-opacity flex items-center justify-center gap-2"
                 >
-                    {status === 'sending' ? (
-                        <>
-                            <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                            Sending...
-                        </>
-                    ) : (
-                        <>
-                            <Send size={13} />
-                            Send Message
-                        </>
-                    )}
+                    {status === 'sending' && <span className="size-3.5 rounded-full border-2 border-current border-t-transparent animate-spin" />}
+                    {status === 'sending' ? 'Sending' : 'Send message'}
                 </button>
             </form>
         </div>

@@ -1,7 +1,7 @@
-import React, { useRef } from 'react';
-import { useGSAP } from '@gsap/react';
-import { gsap, motionTier } from '../lib/motion';
-import { X, ExternalLink, Github, Layers, BookOpen } from 'lucide-react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { motionTier } from '../lib/motion';
+import FadeImg from './FadeImg';
+import { X, ArrowUpRight, BookOpen } from 'lucide-react';
 
 interface Project {
     id: string;
@@ -21,157 +21,72 @@ interface ProjectDetailModalProps {
     onClose: () => void;
 }
 
+const secondary = 'inline-flex items-center justify-center gap-2 rounded-full border border-line px-4 py-2.5 text-sm font-medium text-fg hover:bg-hover transition-colors';
+
 const ProjectDetailModal: React.FC<ProjectDetailModalProps> = ({ project, onClose }) => {
-    const modalRef = useRef<HTMLDivElement>(null);
-    const backdropRef = useRef<HTMLDivElement>(null);
-    const imageRef = useRef<HTMLDivElement>(null);
-    const headerRef = useRef<HTMLDivElement>(null);
-    const contentRef = useRef<HTMLDivElement>(null);
+    const [closing, setClosing] = useState(false);
 
-    // Cinematic open: backdrop fades, panel un-clips from its center line,
-    // image settles from a slight zoom, content cascades in with a blur dissolve
-    useGSAP(() => {
-        if (motionTier() === 'off') return;
-        const tl = gsap.timeline({ defaults: { ease: 'power3.out' } });
-
-        tl.fromTo(backdropRef.current,
-            { opacity: 0 },
-            { opacity: 1, duration: 0.3, ease: 'power2.out' }, 0)
-            .fromTo(modalRef.current,
-                { clipPath: 'inset(46% 8% 46% 8% round 24px)', opacity: 0.6 },
-                { clipPath: 'inset(0% 0% 0% 0% round 16px)', opacity: 1, duration: 0.55, ease: 'power3.inOut' }, 0.05)
-            .fromTo(imageRef.current,
-                { scale: 1.18 },
-                { scale: 1, duration: 1.1, ease: 'power2.out' }, 0.1)
-            .fromTo(headerRef.current ? headerRef.current.children : [],
-                { y: 18, opacity: 0 },
-                { y: 0, opacity: 1, duration: 0.45, stagger: 0.07 }, 0.35)
-            .fromTo(contentRef.current ? contentRef.current.children : [],
-                { y: 16, opacity: 0, filter: 'blur(6px)' },
-                { y: 0, opacity: 1, filter: 'blur(0px)', duration: 0.45, stagger: 0.08, clearProps: 'filter' }, 0.45);
-    }, []);
-
-    const handleBackdropClick = (e: React.MouseEvent) => {
-        if (e.target === backdropRef.current) {
-            handleClose();
-        }
-    };
-
-    const handleClose = () => {
+    // Play the exit before unmounting so it eases out the way it eased in
+    const close = useCallback(() => {
         if (motionTier() === 'off') { onClose(); return; }
-        gsap.to(modalRef.current, {
-            clipPath: 'inset(44% 6% 44% 6% round 24px)',
-            opacity: 0,
-            duration: 0.3,
-            ease: 'power3.in',
-            onComplete: onClose,
-        });
-        gsap.to(backdropRef.current, { opacity: 0, duration: 0.3, ease: 'power2.in' });
-    };
+        setClosing(true);
+        window.setTimeout(onClose, 160);
+    }, [onClose]);
+
+    useEffect(() => {
+        const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, [close]);
+
+    const image = project.detailImage || project.image;
 
     return (
-        <div
-            className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6"
-            style={{ perspective: '1000px' }}
-        >
-            {/* Backdrop */}
-            <div
-                ref={backdropRef}
-                className="absolute inset-0 bg-black/70 backdrop-blur-sm"
-                onClick={handleBackdropClick}
-            />
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6" role="dialog" aria-modal aria-label={project.title}>
+            <div className={`${closing ? 'fade-out' : 'fade-in'} absolute inset-0 bg-black/50`} onClick={close} />
 
-            {/* Modal Container */}
-            <div
-                ref={modalRef}
-                className="relative w-full max-w-2xl bg-[#0f0f0f] border border-[#232323] rounded-2xl overflow-hidden flex flex-col max-h-[90vh]
-                           shadow-[0_32px_80px_rgba(0,0,0,0.7),0_0_0_1px_rgba(34,211,238,0.04)]"
-            >
-                {/* Header Image Area */}
-                <div className="relative h-48 sm:h-64 w-full bg-[#0a0a0a] overflow-hidden shrink-0">
-                    <div
-                        ref={imageRef}
-                        className="absolute inset-0 bg-cover bg-center opacity-70"
-                        style={{ backgroundImage: `url(${project.detailImage || project.image || 'https://grainy-gradients.vercel.app/noise.svg'})` }}
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#0f0f0f] via-[#0f0f0f]/40 to-transparent" />
-                    {/* Cyan hairline along the image base */}
-                    <div className="absolute bottom-0 left-10 right-10 h-px bg-gradient-to-r from-transparent via-[#22d3ee]/40 to-transparent" />
+            <div className={`${closing ? 'pop-out' : 'pop-in'} relative w-full max-w-2xl max-h-[90dvh] flex flex-col overflow-hidden rounded-3xl bg-elevated border border-line shadow-[0_24px_60px_rgba(0,0,0,0.25)]`}>
+                <button
+                    onClick={close}
+                    className="absolute top-3 right-3 z-10 size-9 grid place-items-center rounded-full bg-black/40 text-white hover:bg-black/60 transition-colors"
+                    aria-label="Close"
+                >
+                    <X size={18} />
+                </button>
 
-                    <div className="absolute top-4 right-4 p-2 bg-black/50 backdrop-blur-md rounded-lg border border-[#2a2a2a]">
-                        <Layers className="text-[#22d3ee]" size={18} />
+                {image && (
+                    <div className="aspect-[16/8] w-full shrink-0 bg-raised overflow-hidden">
+                        <FadeImg src={image} alt="" className="w-full h-full object-cover" />
                     </div>
+                )}
 
-                    <button
-                        onClick={handleClose}
-                        className="absolute top-4 left-4 p-2 bg-black/50 hover:bg-white/10 backdrop-blur-md rounded-full text-[#f2f1ec] border border-[#2a2a2a] transition-colors z-10"
-                        aria-label="Close"
-                    >
-                        <X size={18} />
-                    </button>
+                <div className="p-6 sm:p-7 overflow-y-auto">
+                    <div className="text-sm text-subtle mb-1">{project.category}</div>
+                    <h2 className="text-2xl font-semibold tracking-[-0.01em] text-fg mb-3">{project.title}</h2>
+                    <p className="text-[15px] leading-7 text-muted mb-5">{project.description}</p>
 
-                    <div ref={headerRef} className="absolute bottom-6 left-6 right-6">
-                        <span className="px-3 py-1 rounded-full bg-[#22d3ee]/10 border border-[#22d3ee]/25 text-[#67e8f9] text-xs font-mono uppercase tracking-wider mb-3 inline-block">
-                            {project.category}
-                        </span>
-                        <h2 className="text-3xl font-bold text-[#f2f1ec] tracking-tight">{project.title}</h2>
-                    </div>
-                </div>
-
-                {/* Content Body */}
-                <div ref={contentRef} className="p-6 sm:p-8 flex-1 overflow-y-auto">
-                    <div>
-                        <h3 className="text-[#f2f1ec] font-semibold mb-2 text-sm font-grotesk tracking-wide">About Project</h3>
-                        <p className="text-[#a8a8a2] text-sm leading-relaxed mb-6">
-                            {project.description}
-                        </p>
-                    </div>
-
-                    {/* Dynamic Tech Stack Tags */}
                     {project.techStack && project.techStack.length > 0 && (
-                        <div className="flex flex-wrap gap-2 mb-8">
-                            {project.techStack.map((tag, i) => (
-                                <span key={i} className="px-3 py-1 bg-[#141414] border border-[#262626] rounded-md text-xs text-[#8a8a85] font-mono hover:border-[#22d3ee]/30 hover:text-[#d6d5cf] transition-colors">
-                                    {tag}
-                                </span>
+                        <div className="flex flex-wrap gap-1.5 mb-6">
+                            {project.techStack.map((tag) => (
+                                <span key={tag} className="rounded-full bg-raised px-3 py-1 text-sm text-fg">{tag}</span>
                             ))}
                         </div>
                     )}
 
-                    {/* Action Bar */}
-                    <div className="flex flex-wrap gap-3 pt-6 border-t border-[#1f1f1f]">
+                    <div className="flex flex-wrap gap-2">
                         <a
                             href={project.link}
                             target="_blank"
                             rel="noopener noreferrer"
-                            data-magnetic
-                            className="flex-1 min-w-40 flex items-center justify-center gap-2 bg-[#22d3ee] hover:bg-[#67e8f9] text-[#0a0a0a] py-3 rounded-xl font-semibold text-sm transition-colors"
+                            className="inline-flex items-center justify-center gap-2 rounded-full bg-fg text-bg px-4 py-2.5 text-sm font-medium hover:opacity-85 transition-opacity"
                         >
-                            <ExternalLink size={16} />
-                            Visit Live Site
+                            Visit project <ArrowUpRight size={16} />
                         </a>
                         {project.docs && (
-                            <a
-                                href={project.docs}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                data-magnetic
-                                className="flex items-center justify-center gap-2 px-4 py-3 bg-[#141414] border border-[#262626] text-[#8a8a85] hover:text-[#f2f1ec] hover:border-[#22d3ee]/30 rounded-xl font-semibold text-sm transition-colors"
-                            >
-                                <BookOpen size={16} />
-                                Documentation
+                            <a href={project.docs} target="_blank" rel="noopener noreferrer" className={secondary}>
+                                <BookOpen size={16} /> Docs
                             </a>
                         )}
-                        <a
-                            href={project.link}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            data-magnetic
-                            className="flex items-center justify-center px-4 bg-[#141414] border border-[#262626] text-[#8a8a85] hover:text-[#f2f1ec] hover:border-[#2e2e2e] rounded-xl transition-colors"
-                            aria-label="View source on GitHub"
-                        >
-                            <Github size={18} />
-                        </a>
                     </div>
                 </div>
             </div>

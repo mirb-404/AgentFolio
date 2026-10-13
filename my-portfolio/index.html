@@ -3,15 +3,24 @@
 
 <head>
   <meta charset="UTF-8" />
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="theme-color" content="#0a0a0a" />
+  <!-- ?v= busts Chrome's favicon cache — bump it whenever the icon changes -->
+  <link rel="icon" href="/favicon.ico?v=2" sizes="48x48" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=2" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
+  <meta name="theme-color" content="#212121" />
 
-  <!-- Above-the-fold faces: start the font fetch with the HTML instead of
-       waiting for the stylesheet to parse. Both are variable, so these two
-       files cover every weight the site uses. -->
+  <!-- Dark by default; switch to light before first paint only if the visitor chose it -->
+  <script>
+    var light = false;
+    try { light = localStorage.getItem('agentfolio-theme') === 'light'; } catch (e) {}
+    if (light) document.querySelector('meta[name="theme-color"]').setAttribute('content', '#f7f7f5');
+    else document.documentElement.classList.add('dark');
+  </script>
+
+  <!-- Above-the-fold face: start the font fetch with the HTML instead of
+       waiting for the stylesheet to parse. -->
   <link rel="preload" href="/fonts/Satoshi-Variable.woff2" as="font" type="font/woff2" crossorigin />
-  <link rel="preload" href="/fonts/ClashDisplay-Variable.woff2" as="font" type="font/woff2" crossorigin />
 
   <title>AgentFolio</title>
   <meta name="description"

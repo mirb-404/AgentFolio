@@ -1,54 +1,64 @@
 import { useState, useRef, useCallback, useEffect, lazy, Suspense } from 'react';
+import { PanelLeftOpen, SquarePen, Menu } from 'lucide-react';
 import { gsap, motionTier } from './lib/motion';
-import Layout from './components/Layout';
+import { useTheme } from './lib/theme';
+import { withViewTransition } from './lib/viewTransition';
+import { preloadResume } from './lib/resume';
 import ChatInterface from './components/ChatInterface';
-import SplashScreen from './components/SplashScreen';
-import WarpBackground, { type WarpHandle } from './components/WarpBackground';
-import MagneticCursor from './components/MagneticCursor';
-import CommandPalette from './components/CommandPalette';
+import Sidebar from './components/Sidebar';
+import ModelPicker from './components/ModelPicker';
+import type { Tone } from './lib/tone';
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/react";
 
 const BlogSection = lazy(() => import('./components/BlogSection'));
-// three.js lives in its own chunk — the wave field fades in once it loads
-const AgenticBackground = lazy(() => import('./components/AgenticBackground'));
 
 type PortalOrigin = { x: number; y: number };
 
-function App() {
-  const [loading, setLoading] = useState(true);
-  const [hasStarted, setHasStarted] = useState(false);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isBlogOpen, setIsBlogOpen] = useState(false);
-  const [activePrompt, setActivePrompt] = useState<string | null>(null);
-  const [isPaletteOpen, setIsPaletteOpen] = useState(false);
+const iconBtn = 'p-2.5 desk:p-2 rounded-lg text-muted hover:text-fg hover:bg-hover transition-colors';
 
-  // ⌘K / Ctrl+K — command palette from anywhere
+function App() {
+  const [theme, setTheme] = useTheme();
+  const [tone, setTone] = useState<Tone>('default');
+  const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [chatKey, setChatKey] = useState(0);
+  const [activePrompt, setActivePrompt] = useState<string | null>(null);
+  const [isBlogOpen, setIsBlogOpen] = useState(false);
+
+  const blogRef = useRef<HTMLDivElement>(null);
+  const mainRef = useRef<HTMLDivElement>(null);
+  const portalOriginRef = useRef<PortalOrigin | null>(null);
+
+  // Warm the résumé preview while idle so it opens instantly when asked for
+  useEffect(preloadResume, []);
+
+  // ⌘K / Ctrl+K — jump to the composer from anywhere
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
-        setIsPaletteOpen(open => !open);
-      } else if (e.key === 'Escape') {
-        setIsPaletteOpen(false);
+        document.getElementById('composer')?.focus();
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
-  const blogRef = useRef<HTMLDivElement>(null);
-  const mainRef = useRef<HTMLDivElement>(null);
-  const warpRef = useRef<WarpHandle>(null);
-  const portalOriginRef = useRef<PortalOrigin | null>(null);
 
-  const handleStart = useCallback(() => {
-    // Hyperspeed jump fires as the hero shatters — one continuous moment
-    warpRef.current?.jump();
-    setHasStarted(true);
+  // The composer glides back to the centre as the transcript fades out
+  const handleNewChat = useCallback(() => {
+    setMobileOpen(false);
+    withViewTransition(() => setChatKey(k => k + 1));
+  }, []);
+
+  const handlePrompt = useCallback((prompt: string) => {
+    setActivePrompt(prompt);
+    setMobileOpen(false);
   }, []);
 
   const handleBlogOpen = useCallback((origin?: PortalOrigin) => {
     portalOriginRef.current = origin ?? null;
+    setMobileOpen(false);
     setIsBlogOpen(true);
   }, []);
 
@@ -77,9 +87,8 @@ function App() {
       overwrite: true,
       onComplete: () => { gsap.set(el, { clipPath: 'none' }); },
     });
-    // The dark world recedes behind the portal
     if (mainRef.current) {
-      gsap.to(mainRef.current, { scale: 0.965, opacity: 0.55, duration: 0.9, ease: 'power2.inOut', overwrite: true });
+      gsap.to(mainRef.current, { scale: 0.98, opacity: 0.6, duration: 0.9, ease: 'power2.inOut', overwrite: true });
     }
   }, [isBlogOpen]);
 
@@ -127,33 +136,49 @@ function App() {
   }, []);
 
   return (
-    <div className="min-h-[100dvh] bg-[#0a0a0a] text-[#f2f1ec] relative" style={{ zIndex: 1 }}>
-      <div ref={mainRef}>
-        {/* Ambient wave field; warp streaks flash only during the start-chat jump */}
-        <Suspense fallback={null}>
-          <AgenticBackground dimmed={hasStarted} />
-        </Suspense>
-        <WarpBackground ref={warpRef} active={false} />
-        {loading ? (
-          <SplashScreen onComplete={() => setLoading(false)} />
-        ) : (
-          <Layout
-            light={!hasStarted}
-            onHomeClick={() => { setHasStarted(false); if (isBlogOpen) handleBlogClose(); }}
-            onMenuClick={() => setIsSidebarOpen(true)}
-            onBlogClick={handleBlogOpen}
-            onNavPrompt={setActivePrompt}
-          >
-            <ChatInterface
-              hasStarted={hasStarted}
-              onStart={handleStart}
-              activePrompt={activePrompt}
-              onPromptHandled={() => setActivePrompt(null)}
-              isSidebarOpen={isSidebarOpen}
-              setIsSidebarOpen={setIsSidebarOpen}
-            />
-          </Layout>
-        )}
+    <>
+      <div ref={mainRef} className="flex h-[100dvh] bg-bg text-fg">
+        <Sidebar
+          collapsed={collapsed}
+          mobileOpen={mobileOpen}
+          onCollapse={() => setCollapsed(true)}
+          onMobileClose={() => setMobileOpen(false)}
+          onNewChat={handleNewChat}
+          onPrompt={handlePrompt}
+          onBlog={handleBlogOpen}
+          theme={theme}
+          onThemeChange={setTheme}
+        />
+
+        <main className="flex-1 min-w-0 flex flex-col">
+          {/* Top bar */}
+          <header className="h-14 shrink-0 flex items-center gap-1 px-2 sm:px-3">
+            <button onClick={() => setMobileOpen(true)} className={`desk:hidden ${iconBtn}`} aria-label="Open sidebar">
+              <Menu size={20} />
+            </button>
+            {collapsed && (
+              <div className="fade-in hidden desk:flex items-center gap-0.5">
+                <button onClick={() => setCollapsed(false)} className={iconBtn} aria-label="Open sidebar" title="Open sidebar">
+                  <PanelLeftOpen size={19} />
+                </button>
+                <button onClick={handleNewChat} className={iconBtn} aria-label="New chat" title="New chat">
+                  <SquarePen size={19} />
+                </button>
+              </div>
+            )}
+            <ModelPicker tone={tone} onChange={setTone} />
+            <button onClick={handleNewChat} className={`desk:hidden ml-auto ${iconBtn}`} aria-label="New chat">
+              <SquarePen size={19} />
+            </button>
+          </header>
+
+          <ChatInterface
+            key={chatKey}
+            tone={tone}
+            activePrompt={activePrompt}
+            onPromptHandled={() => setActivePrompt(null)}
+          />
+        </main>
       </div>
 
       {isBlogOpen && (
@@ -164,23 +189,9 @@ function App() {
         </div>
       )}
 
-      {isPaletteOpen && (
-        <CommandPalette
-          variant="overlay"
-          autoFocus
-          onClose={() => setIsPaletteOpen(false)}
-          onSubmit={(text) => {
-            setIsPaletteOpen(false);
-            if (isBlogOpen) handleBlogClose();
-            setActivePrompt(text);
-          }}
-        />
-      )}
-
-      <MagneticCursor />
       <Analytics />
       <SpeedInsights />
-    </div>
+    </>
   );
 }
 

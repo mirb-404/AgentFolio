@@ -69,10 +69,14 @@ export default async function handler(req, res) {
                 "Authorization": `Bearer ${groqKey}`
             },
             body: JSON.stringify({
-                model: "llama-3.1-8b-instant",
+                // llama-3.1-8b-instant was retired by Groq; gpt-oss-20b is the
+                // fast, cheap successor. Its reasoning tokens count toward
+                // max_tokens, so keep effort low and leave some headroom.
+                model: "openai/gpt-oss-20b",
+                reasoning_effort: "low",
                 messages: [{ role: "system", content: systemPrompt }],
                 temperature: 0.7,
-                max_tokens: 500
+                max_tokens: 800
             })
         });
 
