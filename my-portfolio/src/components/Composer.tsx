@@ -23,7 +23,6 @@ const EXAMPLES = [
     'How can I get in touch?',
 ];
 const ROTATE_MS = 3500;
-const FADE_MS = 250;
 const canHover = typeof window !== 'undefined' && window.matchMedia('(hover: hover)').matches;
 
 /**
@@ -33,24 +32,20 @@ const canHover = typeof window !== 'undefined' && window.matchMedia('(hover: hov
 const Composer: React.FC<ComposerProps> = ({ onSend, onStop, busy, autoFocus }) => {
     const [value, setValue] = useState('');
     const [focused, setFocused] = useState(false);
-    const [hint, setHint] = useState(0);
-    const [hintVisible, setHintVisible] = useState(true);
+    // `turn` remounts the two hint layers so their roll animations replay each swap
+    const [{ hint, prev, turn }, setRoll] = useState({ hint: 0, prev: -1, turn: 0 });
     const ref = useRef<HTMLTextAreaElement>(null);
     const empty = value === '';
 
-    // Cycle the example question — fade out, swap, fade in. Paused while typing.
+    // Roll to the next example — outgoing and incoming overlap, so there's no blank beat.
+    // Paused while typing, and while the tab is in the background.
     useEffect(() => {
         if (!empty) return;
-        let swap: number | undefined;
         const tick = window.setInterval(() => {
             if (isHidden()) return;
-            setHintVisible(false);
-            swap = window.setTimeout(() => {
-                setHint(i => (i + 1) % EXAMPLES.length);
-                setHintVisible(true);
-            }, FADE_MS);
+            setRoll(r => ({ hint: (r.hint + 1) % EXAMPLES.length, prev: r.hint, turn: r.turn + 1 }));
         }, ROTATE_MS);
-        return () => { window.clearInterval(tick); window.clearTimeout(swap); };
+        return () => window.clearInterval(tick);
     }, [empty]);
 
     // Grow with the text, up to a cap, then scroll
@@ -77,11 +72,11 @@ const Composer: React.FC<ComposerProps> = ({ onSend, onStop, busy, autoFocus }) 
                 {/* Animated stand-in for the placeholder — a native one can't fade */}
                 {empty && (
                     <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 flex items-center gap-2 py-1.5 text-base leading-6 text-subtle">
-                        <span
-                            className={`truncate transition-[opacity,transform] motion-reduce:transition-none ${hintVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-1'}`}
-                            style={{ transitionDuration: `${FADE_MS}ms` }}
-                        >
-                            Try “{EXAMPLES[hint]}”
+                        <span className="relative h-6 flex-1 min-w-0 overflow-hidden">
+                            {turn > 0 && prev >= 0 && (
+                                <span key={`out-${turn}`} className="hint-out absolute inset-0 truncate">Try “{EXAMPLES[prev]}”</span>
+                            )}
+                            <span key={turn} className={`${turn > 0 ? 'hint-in ' : ''}absolute inset-0 truncate`}>Try “{EXAMPLES[hint]}”</span>
                         </span>
                         {canHover && focused && (
                             <kbd className="shrink-0 rounded border border-line px-1.5 text-[11px] leading-[18px] font-sans text-subtle">Tab</kbd>
