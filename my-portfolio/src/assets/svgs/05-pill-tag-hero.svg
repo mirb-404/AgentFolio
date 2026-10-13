@@ -1,5 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 100" width="160" height="100">
-  <rect width="160" height="100" fill="#18181b" rx="12"></rect>
-  <rect x="24" y="20" width="112" height="60" rx="12" fill="#00c8c8"></rect>
-  <text x="80" y="64" text-anchor="middle" font-family="&#39;Space Grotesk&#39;, &#39;Helvetica Neue&#39;, sans-serif" font-weight="700" font-size="40" letter-spacing="-2" fill="#0a0a0b">AF</text>
-</svg>

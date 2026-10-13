@@ -3,17 +3,16 @@ import { PanelLeftOpen, SquarePen, Menu } from 'lucide-react';
 import { gsap, motionTier } from './lib/motion';
 import { useTheme } from './lib/theme';
 import { withViewTransition } from './lib/viewTransition';
+import { coverRadius, isDeskLayout, type Point } from './lib/dom';
 import { preloadResume } from './lib/resume';
-import ChatInterface from './components/ChatInterface';
-import Sidebar from './components/Sidebar';
-import ModelPicker from './components/ModelPicker';
+import ChatInterface from './components/chat/ChatInterface';
+import Sidebar from './components/layout/Sidebar';
+import ModelPicker from './components/chat/ModelPicker';
 import type { Tone } from './lib/tone';
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/react";
 
-const BlogSection = lazy(() => import('./components/BlogSection'));
-
-type PortalOrigin = { x: number; y: number };
+const BlogSection = lazy(() => import('./components/blog/BlogSection'));
 
 const iconBtn = 'p-2.5 desk:p-2 rounded-lg text-muted hover:text-fg hover:bg-hover transition-colors';
 
@@ -28,7 +27,7 @@ function App() {
 
   const blogRef = useRef<HTMLDivElement>(null);
   const mainRef = useRef<HTMLDivElement>(null);
-  const portalOriginRef = useRef<PortalOrigin | null>(null);
+  const portalOriginRef = useRef<Point | null>(null);
 
   // Warm the résumé preview while idle so it opens instantly when asked for
   useEffect(preloadResume, []);
@@ -51,6 +50,8 @@ function App() {
     withViewTransition(() => setChatKey(k => k + 1));
   }, []);
 
+  const handlePromptHandled = useCallback(() => setActivePrompt(null), []);
+
   const handlePrompt = useCallback((prompt: string) => {
     setActivePrompt(prompt);
     setMobileOpen(false);
@@ -58,11 +59,11 @@ function App() {
 
   // Desktop: un-collapse the docked sidebar. Phones: slide the drawer in.
   const handleBrowseTopics = useCallback(() => {
-    if (window.matchMedia('(min-width: 768px) and (min-height: 500px)').matches) setCollapsed(false);
+    if (isDeskLayout()) setCollapsed(false);
     else setMobileOpen(true);
   }, []);
 
-  const handleBlogOpen = useCallback((origin?: PortalOrigin) => {
+  const handleBlogOpen = useCallback((origin?: Point) => {
     portalOriginRef.current = origin ?? null;
     setMobileOpen(false);
     setIsBlogOpen(true);
@@ -80,10 +81,7 @@ function App() {
       return;
     }
 
-    const radius = Math.hypot(
-      Math.max(origin.x, window.innerWidth - origin.x),
-      Math.max(origin.y, window.innerHeight - origin.y)
-    ) * 1.05;
+    const radius = coverRadius(origin) * 1.05;
 
     gsap.set(el, { opacity: 1, clipPath: `circle(0px at ${origin.x}px ${origin.y}px)` });
     gsap.to(el, {
@@ -125,10 +123,7 @@ function App() {
     }
 
     // Collapse back through the portal it came from
-    const radius = Math.hypot(
-      Math.max(origin.x, window.innerWidth - origin.x),
-      Math.max(origin.y, window.innerHeight - origin.y)
-    ) * 1.05;
+    const radius = coverRadius(origin) * 1.05;
 
     gsap.set(el, { clipPath: `circle(${radius}px at ${origin.x}px ${origin.y}px)` });
     gsap.to(el, {
@@ -182,7 +177,7 @@ function App() {
             key={chatKey}
             tone={tone}
             activePrompt={activePrompt}
-            onPromptHandled={() => setActivePrompt(null)}
+            onPromptHandled={handlePromptHandled}
             onBrowseTopics={handleBrowseTopics}
           />
         </main>

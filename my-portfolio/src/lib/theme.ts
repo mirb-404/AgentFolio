@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
-import { flushSync } from 'react-dom';
+import { withViewTransition } from './viewTransition';
+import { coverRadius, type Point } from './dom';
 
 export type ThemePref = 'light' | 'dark';
-export type RevealOrigin = { x: number; y: number };
 
 const KEY = 'agentfolio-theme';
 const META_COLORS = { light: '#f7f7f5', dark: '#212121' };
@@ -22,27 +22,19 @@ function apply(pref: ThemePref) {
         ?.setAttribute('content', dark ? META_COLORS.dark : META_COLORS.light);
 }
 
-type ViewTransition = { ready: Promise<void>; finished: Promise<void> };
-type DocWithVT = Document & { startViewTransition?: (update: () => void) => ViewTransition };
-
 /**
  * Same move as the blog portal: the new theme grows out of the toggle as an
  * expanding circle over a frozen snapshot of the old one. Falls back to an
  * instant swap where View Transitions aren't supported or motion is reduced.
  */
-function revealTheme(update: () => void, origin?: RevealOrigin) {
-    const doc = document as DocWithVT;
-    if (!doc.startViewTransition || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-        update();
-        return;
-    }
-
+function revealTheme(update: () => void, origin?: Point) {
     const root = document.documentElement;
     const { x, y } = origin ?? { x: window.innerWidth / 2, y: window.innerHeight / 2 };
-    const radius = Math.hypot(Math.max(x, window.innerWidth - x), Math.max(y, window.innerHeight - y));
+    const radius = coverRadius({ x, y });
 
     root.classList.add('theme-vt');
-    const vt = doc.startViewTransition(() => flushSync(update));
+    const vt = withViewTransition(update);
+    if (!vt) { root.classList.remove('theme-vt'); return; }
     vt.ready.then(() => {
         root.animate(
             { clipPath: [`circle(0px at ${x}px ${y}px)`, `circle(${radius}px at ${x}px ${y}px)`] },
@@ -61,7 +53,7 @@ export function useTheme() {
 
     useEffect(() => { apply(pref); }, [pref]);
 
-    const update = useCallback((next: ThemePref, origin?: RevealOrigin) => {
+    const update = useCallback((next: ThemePref, origin?: Point) => {
         try {
             localStorage.setItem(KEY, next);
         } catch { /* storage blocked */ }

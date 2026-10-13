@@ -40,10 +40,32 @@ export interface Certification {
     icon: string;
 }
 
-export interface Interest {
+export interface Project {
+    id: string;
     title: string;
+    category: string;
     description: string;
+    link: string;
+    docs?: string;
+    image?: string;
+    /** Optional interior shot for the detail modal; falls back to `image` */
+    detailImage?: string;
+    techStack?: string[];
+    isNew?: boolean;
+}
+
+export interface SkillCategory {
+    title: string;
     icon: string;
+    skills: string[];
+}
+
+export interface Hobby {
+    title: string;
+    description?: string;
+    icon?: string;
+    color?: string;
+    bgImage?: string;
 }
 
 // ===================================
@@ -305,17 +327,3 @@ I'm also an avid Agentic Ai Researcher who is actively building industry grade a
     ]
 };
 
-// ===================================
-// Chat Prompts
-// ===================================
-
-export const suggestPrompts = [
-    "Tell me about yourself",
-    "Recent GitHub Activity",
-    "Show me your projects",
-    "What are your skills?",
-    "Work Experience",
-    "Certifications",
-    "My Hobbies",
-    "Contact Me"
-];

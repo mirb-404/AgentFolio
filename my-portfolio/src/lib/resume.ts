@@ -1,3 +1,5 @@
+import { whenIdle } from './dom';
+
 // Snapshot of the résumé produced by `npm run resume:sync` (scripts/resume-sync.mjs).
 // Imported through Vite so every file gets a content hash and can be cached forever.
 import pdfUrl from '../assets/resume/resume.pdf?url';
@@ -35,6 +37,5 @@ export function preloadResume() {
         }
         fetch(resume.pdfUrl, { priority: 'low' } as RequestInit).catch(() => {});
     };
-    if ('requestIdleCallback' in window) window.requestIdleCallback(run, { timeout: 4000 });
-    else setTimeout(run, 2000);
+    whenIdle(run, 4000);
 }

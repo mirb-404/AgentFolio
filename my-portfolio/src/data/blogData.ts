@@ -1,8 +1,6 @@
 import { parseBlogPost } from '../lib/blogMarkdown';
 import type { AssetResolver, BlogPost } from '../lib/blogMarkdown';
 
-export type { BlogAuthor, BlogContent, BlogPost } from '../lib/blogMarkdown';
-
 // ─── Adding a post ──────────────────────────────────────────────────────────
 // Drop a new .md file into src/content/blog/ — the filename (minus .md) is the
 // post id used in URLs. Nothing here needs editing. See content/blog/README.md.

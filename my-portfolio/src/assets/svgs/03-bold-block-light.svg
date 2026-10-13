@@ -1,7 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 160" width="240" height="160">
-  <rect width="240" height="160" fill="#f5f5f7" rx="12"></rect>
-  <text x="20" y="108" font-family="&#39;Space Grotesk&#39;, &#39;Helvetica Neue&#39;, sans-serif" font-weight="700" font-size="96" letter-spacing="-6" fill="#0a0a0b">A</text>
-  <text x="93" y="108" font-family="&#39;Space Grotesk&#39;, &#39;Helvetica Neue&#39;, sans-serif" font-weight="700" font-size="96" letter-spacing="-6" fill="#84e040">F</text>
-  <rect x="20" y="116" width="200" height="3" fill="#84e040"></rect>
-  <text x="20" y="144" font-family="&#39;Space Grotesk&#39;, &#39;Helvetica Neue&#39;, sans-serif" font-weight="500" font-size="20" letter-spacing="3" fill="#0a0a0b">AGENTFOLIO</text>
-</svg>

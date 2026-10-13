@@ -1,6 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 100" width="400" height="100">
-  <rect width="480" height="100" fill="none" rx="12"></rect>
-  <rect x="24" y="22" width="78" height="56" rx="10" fill="#00c8c8"></rect>
-  <text x="63" y="62" text-anchor="middle" font-family="&#39;Space Grotesk&#39;, &#39;Helvetica Neue&#39;, sans-serif" font-weight="700" font-size="30" letter-spacing="-1.2" fill="#0a0a0b">AF</text>
-  <text x="120" y="60" font-family="&#39;Space Grotesk&#39;, &#39;Helvetica Neue&#39;, sans-serif" font-weight="600" font-size="34" letter-spacing="-0.9" fill="#f5f5f7">AgentFolio</text>
-</svg>

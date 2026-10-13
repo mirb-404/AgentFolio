@@ -1,7 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 76 76" width="76" height="76">
-  <circle cx="38" cy="38" r="33" stroke="#00c8c8" stroke-width="2" stroke-opacity="0.3" fill="none"></circle>
-  <path d="M38 8 A30 30 0 1 1 15 58" stroke="#00c8c8" stroke-width="3" stroke-linecap="round" fill="none"></path>
-  <circle cx="15" cy="58" r="5" fill="#4f6ef7"></circle>
-  <circle cx="15" cy="58" r="8" fill="#4f6ef7" fill-opacity="0.2"></circle>
-  <text x="38" y="44" text-anchor="middle" font-family="&#39;Space Grotesk&#39;, &#39;Helvetica Neue&#39;, sans-serif" font-weight="700" font-size="20" letter-spacing="-1" fill="#f5f5f7">AF</text>
-</svg>
