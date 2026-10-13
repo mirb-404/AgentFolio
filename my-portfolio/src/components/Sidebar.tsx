@@ -1,124 +1,155 @@
 import React from 'react';
-import { X, Trash2, Terminal, ChevronRight } from 'lucide-react';
+import {
+    SquarePen, BookOpen, PanelLeftClose, X, Sun, Moon,
+    Github, Linkedin, Twitter, Mail, ExternalLink,
+} from 'lucide-react';
+import LogoMark from './LogoMark';
+import { portfolioData } from '../data/portfolioData';
+import type { ThemePref, RevealOrigin } from '../lib/theme';
 
 interface SidebarProps {
-    isOpen: boolean;
-    onClose: () => void;
-    onClear: () => void;
-    onCommandSelect: (cmd: string) => void;
-    isDisabled?: boolean;
+    /** Desktop: docked vs collapsed */
+    collapsed: boolean;
+    /** Mobile: drawer open */
+    mobileOpen: boolean;
+    onCollapse: () => void;
+    onMobileClose: () => void;
+    onNewChat: () => void;
+    onPrompt: (prompt: string) => void;
+    onBlog: (origin?: { x: number; y: number }) => void;
+    theme: ThemePref;
+    onThemeChange: (t: ThemePref, origin?: RevealOrigin) => void;
 }
 
-const secretCommands = [
-    { cmd: 'help', desc: 'System manual' },
-    { cmd: 'clear', desc: 'Clear terminal' },
-    { cmd: 'matrix', desc: 'Enter simulation' },
+// Portfolio sections, presented the way a chat app lists past conversations
+const TOPICS: { label: string; prompt: string }[] = [
+    { label: 'About me', prompt: 'Tell me about yourself' },
+    { label: 'Projects', prompt: 'Show me your projects' },
+    { label: 'Work experience', prompt: 'Tell me about your experience' },
+    { label: 'Skills & stack', prompt: 'What are your skills?' },
+    { label: 'Certifications', prompt: 'Certifications' },
+    { label: 'Recent GitHub activity', prompt: 'Recent GitHub Activity' },
+    { label: 'Life outside code', prompt: 'My Hobbies' },
+    { label: 'Résumé', prompt: 'Show me your resume' },
 ];
 
-const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, onClear, onCommandSelect, isDisabled = false }) => {
-    // Obsidian palette — one dark world
-    const c = {
-        panel: 'bg-[#0f0f0f] border-r border-[#1f1f1f]',
-        title: 'text-[#f2f1ec]', titleIcon: 'text-[#8a8a85]',
-        closeBtn: 'hover:bg-[#1a1a1a] text-[#8a8a85] hover:text-[#f2f1ec]',
-        sectionLabel: 'text-[#555550]',
-        itemHover: 'hover:bg-[#1a1a1a]',
-        chip: 'bg-[#141414] border-[#262626] text-[#8a8a85] group-hover:border-[#22d3ee]/40 group-hover:text-[#22d3ee]',
-        chipDisabled: 'bg-[#141414] border-[#1f1f1f] text-[#3d3d3d]',
-        cmd: 'text-[#d6d5cf]', cmdDisabled: 'text-[#4a4a45]',
-        desc: 'text-[#8a8a85]', descDisabled: 'text-[#3d3d3d]',
-        footer: 'border-t border-[#1f1f1f]',
-    };
+
+const socialIcon = (name: string) =>
+    name.includes('GitHub') ? Github :
+        name.includes('LinkedIn') ? Linkedin :
+            name.includes('Twitter') ? Twitter :
+                name.includes('Email') || name.includes('Mail') ? Mail : ExternalLink;
+
+const row = 'w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-fg hover:bg-hover transition-colors text-left';
+
+const Sidebar: React.FC<SidebarProps> = ({
+    collapsed, mobileOpen, onCollapse, onMobileClose, onNewChat, onPrompt, onBlog, theme, onThemeChange,
+}) => {
+    // Follows the system until the visitor picks; every click visibly flips
+    const isDark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    const ThemeIcon = isDark ? Sun : Moon;
+    const themeLabel = isDark ? 'Switch to light theme' : 'Switch to dark theme';
 
     return (
         <>
-            {/* Backdrop */}
+            {/* Mobile backdrop */}
             <div
-                className={`fixed inset-0 bg-[#14130f]/40 backdrop-blur-sm z-40 transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
-                onClick={onClose}
+                onClick={onMobileClose}
+                className={`md:hidden fixed inset-0 z-40 bg-black/40 transition-opacity duration-300 ${mobileOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
             />
 
-            {/* Panel */}
-            <div
-                className={`fixed top-0 left-0 h-full w-72 sm:w-80 ${c.panel} z-50 transform transition-transform duration-300 ease-out ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}
+            <aside
+                className={`fixed md:relative inset-y-0 left-0 z-50 md:z-auto shrink-0 overflow-hidden bg-panel border-r border-line
+                    w-[280px] transition-[transform,width] duration-300 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none
+                    ${mobileOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0
+                    ${collapsed ? 'md:w-0 md:border-r-0' : 'md:w-[260px]'}`}
+                aria-label="Sidebar"
             >
-                <div className="flex flex-col h-full p-5">
-                    {/* Header */}
-                    <div className="flex justify-between items-center mb-7">
-                        <h2 className={`text-[15px] font-bold ${c.title} flex items-center gap-2 font-grotesk tracking-wide`}>
-                            <Terminal size={16} className={c.titleIcon} />
-                            <span>System Control</span>
-                        </h2>
+                {/* Fixed inner width so content doesn't reflow while the panel animates */}
+                <div className="flex flex-col h-full w-[280px] md:w-[260px] p-2">
+                    {/* Brand + collapse */}
+                    <div className="flex items-center justify-between h-11 px-1.5 mb-1">
+                        <button onClick={onNewChat} className="flex items-center gap-2 rounded-lg px-1 py-1 text-fg" title="AgentFolio — New chat">
+                            <LogoMark size={22} />
+                            <span className="font-semibold text-[15px] tracking-[-0.02em]">AgentFolio</span>
+                        </button>
                         <button
-                            onClick={onClose}
-                            className={`p-1.5 rounded-lg transition-colors ${c.closeBtn}`}
+                            onClick={() => window.matchMedia('(min-width: 768px)').matches ? onCollapse() : onMobileClose()}
+                            className="p-2 rounded-lg text-subtle hover:text-fg hover:bg-hover transition-colors"
+                            aria-label="Close sidebar"
                         >
-                            <X size={17} />
+                            <X size={18} className="md:hidden" />
+                            <PanelLeftClose size={18} className="hidden md:block" />
                         </button>
                     </div>
 
-                    {/* Commands */}
-                    <div className="flex-1 overflow-y-auto">
-                        <h3 className={`text-[10px] font-semibold ${c.sectionLabel} uppercase tracking-[0.15em] mb-3 px-1 font-mono`}>
-                            Secret Commands
-                        </h3>
-                        <div className="space-y-0.5">
-                            {secretCommands.map((item, idx) => (
-                                <button
-                                    key={idx}
-                                    onClick={() => {
-                                        if (!isDisabled) {
-                                            onCommandSelect(item.cmd);
-                                            onClose();
-                                        }
-                                    }}
-                                    disabled={isDisabled}
-                                    className={`w-full text-left group p-2.5 rounded-xl transition-all ${isDisabled ? 'opacity-40 cursor-not-allowed' : c.itemHover}`}
-                                >
-                                    <div className="flex items-center gap-3">
-                                        <div className={`w-6 h-6 flex items-center justify-center rounded-lg border transition-colors ${isDisabled ? c.chipDisabled : c.chip}`}>
-                                            <ChevronRight size={12} />
-                                        </div>
-                                        <div>
-                                            <code className={`text-sm font-medium font-mono block ${isDisabled ? c.cmdDisabled : c.cmd}`}>
-                                                {item.cmd}
-                                            </code>
-                                            <p className={`text-xs ${isDisabled ? c.descDisabled : c.desc}`}>
-                                                {item.desc}
-                                            </p>
-                                        </div>
-                                    </div>
+                    <button onClick={onNewChat} className={row}>
+                        <SquarePen size={17} className="text-muted" /> New chat
+                    </button>
+                    <button
+                        onClick={(e) => {
+                            const r = e.currentTarget.getBoundingClientRect();
+                            onBlog({ x: r.left + r.width / 2, y: r.top + r.height / 2 });
+                        }}
+                        className={row}
+                    >
+                        <BookOpen size={17} className="text-muted" /> Blog
+                    </button>
+
+                    {/* Topics */}
+                    <div className="mt-6 flex-1 min-h-0 overflow-y-auto">
+                        <h3 className="px-2.5 pb-1.5 text-xs font-medium text-subtle">Explore</h3>
+                        <nav className="flex flex-col">
+                            {TOPICS.map(t => (
+                                <button key={t.label} onClick={() => onPrompt(t.prompt)} className={`${row} truncate`}>
+                                    {t.label}
                                 </button>
                             ))}
-                        </div>
+                        </nav>
                     </div>
 
-                    {/* Footer */}
-                    <div className={`pt-5 ${c.footer} mt-auto`}>
-                        <button
-                            onClick={() => {
-                                if (!isDisabled) {
-                                    onClear();
-                                    onClose();
-                                }
-                            }}
-                            disabled={isDisabled}
-                            className={`w-full py-2.5 px-4 flex items-center justify-center gap-2 rounded-xl transition-colors border text-sm font-medium ${
-                                isDisabled
-                                    ? 'bg-red-500/5 text-red-500/30 border-red-500/8 cursor-not-allowed'
-                                    : 'bg-red-500/8 hover:bg-red-500/15 text-red-500/70 hover:text-red-400 border-red-500/15 hover:border-red-500/30'
-                            }`}
-                        >
-                            <Trash2 size={15} />
-                            <span>Clear Chat History</span>
+                    {/* Footer — socials, theme, and the "account" row */}
+                    <div className="pt-2 border-t border-line">
+                        <div className="flex items-center gap-0.5 px-1 py-1">
+                            {portfolioData.socials.map(s => {
+                                const Icon = socialIcon(s.name);
+                                return (
+                                    <a
+                                        key={s.name}
+                                        href={s.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        title={s.name}
+                                        className="p-2 rounded-lg text-subtle hover:text-fg hover:bg-hover transition-colors"
+                                    >
+                                        <Icon size={16} />
+                                    </a>
+                                );
+                            })}
+                            <button
+                                onClick={(e) => {
+                                    const r = e.currentTarget.getBoundingClientRect();
+                                    onThemeChange(isDark ? 'light' : 'dark', { x: r.left + r.width / 2, y: r.top + r.height / 2 });
+                                }}
+                                title={themeLabel}
+                                aria-label={themeLabel}
+                                className="ml-auto p-2 rounded-lg text-subtle hover:text-fg hover:bg-hover transition-colors"
+                            >
+                                <ThemeIcon size={16} />
+                            </button>
+                        </div>
+                        <button onClick={() => onPrompt('Contact me')} className={`${row} py-2.5`}>
+                            <img src={portfolioData.profileImage} alt="" className="size-8 rounded-full object-cover shrink-0" />
+                            <span className="min-w-0 flex-1">
+                                <span className="block text-sm font-medium truncate">{portfolioData.name}</span>
+                                <span className="block text-xs text-subtle truncate">Get in touch</span>
+                            </span>
                         </button>
                     </div>
                 </div>
-            </div>
+            </aside>
         </>
     );
 };
 
-// Mounted for the whole chat session and re-rendered by every streaming tick
-// otherwise — its props only change when the sidebar actually opens or locks.
 export default React.memo(Sidebar);

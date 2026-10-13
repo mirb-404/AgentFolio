@@ -1,7 +1,7 @@
-import React, { useRef, useMemo } from 'react';
-import { useGSAP } from '@gsap/react';
-import { gsap, motionTier } from '../lib/motion';
-import { User, Download, ChevronLeft, ChevronRight } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ChevronLeft, ChevronRight, Copy, Check } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { portfolioData } from '../data/portfolioData';
 import ProjectCard from './ProjectCard';
 import SkillsDisplay from './SkillsDisplay';
@@ -9,35 +9,34 @@ import ExperienceTimeline from './ExperienceTimeline';
 import BioCard from './BioCard';
 import CertificationDisplay from './CertificationDisplay';
 import InteractiveHobbies from './InteractiveHobbies';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-const meImg = "/me.webp";
 import GithubWidget from './GithubWidget';
+import ResumeCard from './ResumeCard';
+import { ThoughtSummary, type Trace } from './Thinking';
 
 interface ChatMessageProps {
     role: 'agent' | 'user' | 'tool';
     content: string | React.ReactNode;
-    timestamp?: string;
+    isStreaming?: boolean;
+    /** Latest agent reply keeps its action row visible, like ChatGPT */
+    isLatest?: boolean;
+    trace?: Trace;
     onProjectSelect?: (project: any) => void;
 }
 
-
-// Renderer map for react-markdown. Hoisted to module scope on purpose: rebuilding
-// this object each render hands ReactMarkdown fresh component identities and
-// forces it to re-render the whole tree, which during streaming happens
-// many times a second.
+// Hoisted to module scope: fresh component identities each render would force
+// ReactMarkdown to rebuild the whole tree on every streaming tick.
 const MD_COMPONENTS = {
-    strong: ({ node, ...props }: any) => <span className="font-bold text-[#f2f1ec]" {...props} />,
-    ul: ({ node, ...props }: any) => <ul className="list-disc list-outside ml-4 my-2 space-y-1 text-[#a8a8a2]" {...props} />,
-    ol: ({ node, ...props }: any) => <ol className="list-decimal list-outside ml-4 my-2 space-y-1 text-[#a8a8a2]" {...props} />,
-    li: ({ node, ...props }: any) => <li className="pl-1 leading-relaxed text-xs sm:text-sm" {...props} />,
-    p: ({ node, ...props }: any) => <p className="mb-2 last:mb-0 leading-relaxed text-[#d6d5cf] text-xs sm:text-sm md:text-[15px]" {...props} />,
-    a: ({ node, ...props }: any) => <a className="text-[#67e8f9] hover:text-[#22d3ee] hover:underline transition-colors font-medium text-xs sm:text-sm" target="_blank" rel="noopener noreferrer" {...props} />,
-    code: ({ node, ...props }: any) => <span className="font-mono text-[10px] sm:text-xs text-[#67e8f9] bg-[#22d3ee]/10 px-1 py-0.5 rounded" {...props} />,
-    h1: ({ node, ...props }: any) => <h1 className="text-base sm:text-lg md:text-xl font-bold text-[#f2f1ec] mb-2 mt-4" {...props} />,
-    h2: ({ node, ...props }: any) => <h2 className="text-sm sm:text-base md:text-lg font-bold text-[#f2f1ec] mb-2 mt-4" {...props} />,
-    h3: ({ node, ...props }: any) => <h3 className="text-sm sm:text-[15px] font-bold text-[#f2f1ec] mb-1 mt-3" {...props} />,
-    blockquote: ({ node, ...props }: any) => <blockquote className="border-l-4 border-[#2e2e2e] pl-4 py-1 my-2 italic text-[#8a8a85] text-xs sm:text-sm" {...props} />,
+    strong: ({ node, ...props }: any) => <strong className="font-semibold text-fg" {...props} />,
+    ul: ({ node, ...props }: any) => <ul className="list-disc pl-6 my-3 space-y-1.5 marker:text-subtle" {...props} />,
+    ol: ({ node, ...props }: any) => <ol className="list-decimal pl-6 my-3 space-y-1.5 marker:text-subtle" {...props} />,
+    li: ({ node, ...props }: any) => <li className="pl-1" {...props} />,
+    p: ({ node, ...props }: any) => <p className="mb-4 last:mb-0" {...props} />,
+    a: ({ node, ...props }: any) => <a className="font-medium underline decoration-line-strong underline-offset-[3px] hover:decoration-fg transition-colors" target="_blank" rel="noopener noreferrer" {...props} />,
+    code: ({ node, ...props }: any) => <code className="font-mono text-[0.85em] bg-raised rounded-md px-1.5 py-0.5" {...props} />,
+    h1: ({ node, ...props }: any) => <h1 className="text-xl font-semibold mt-6 mb-3 first:mt-0" {...props} />,
+    h2: ({ node, ...props }: any) => <h2 className="text-lg font-semibold mt-6 mb-3 first:mt-0" {...props} />,
+    h3: ({ node, ...props }: any) => <h3 className="text-base font-semibold mt-5 mb-2 first:mt-0" {...props} />,
+    blockquote: ({ node, ...props }: any) => <blockquote className="border-l-2 border-line-strong pl-4 my-3 text-muted" {...props} />,
 };
 
 const MD_PLUGINS = [remarkGfm];
@@ -46,15 +45,19 @@ const noop = () => {};
 const FENCE = /^\s*(```|~~~)/;
 const LIST_OR_QUOTE = /^\s{0,3}(?:[-*+]\s|\d{1,9}[.)]\s|>)/;
 const INDENTED = /^\s{2,}\S/;
+const TAG = /{{[A-Z_]+}}/g;
+// A tag the typewriter is halfway through ("{{PROJ") — hidden until complete
+const PARTIAL_TAG = /\{(\{[A-Z_]*\}?)?$/;
+
+// The sideways nudge plays once per visit, on the first project row
+let deckNudged = false;
 
 /**
  * Split a markdown run into paragraph-sized blocks. A streaming message then
  * only re-parses its final block on each tick instead of the whole document —
  * every earlier block is byte-identical and memoised away.
  *
- * Two things must survive intact or the rendering changes: fenced code, and
- * "loose" lists (a blank line between items is spacing, not a boundary —
- * splitting there would restart an ordered list at 1).
+ * Fenced code and "loose" lists must survive intact or the rendering changes.
  */
 function splitBlocks(text: string): string[] {
     const lines = text.split('\n');
@@ -80,7 +83,6 @@ function splitBlocks(text: string): string[] {
             continue;
         }
 
-        // Blank line outside a fence — a candidate boundary
         if (!current.length) continue;
 
         let j = i + 1;
@@ -88,7 +90,7 @@ function splitBlocks(text: string): string[] {
         const next = j < lines.length ? lines[j] : null;
 
         if (next && currentStartsList() && (LIST_OR_QUOTE.test(next) || INDENTED.test(next))) {
-            current.push('');   // stay inside the list
+            current.push('');
             continue;
         }
 
@@ -101,7 +103,7 @@ function splitBlocks(text: string): string[] {
 }
 
 const MarkdownBlock = React.memo<{ text: string }>(({ text }) => (
-    <div className="mb-2 last:mb-0">
+    <div className="mb-4 last:mb-0">
         <ReactMarkdown remarkPlugins={MD_PLUGINS} components={MD_COMPONENTS}>
             {text}
         </ReactMarkdown>
@@ -109,248 +111,193 @@ const MarkdownBlock = React.memo<{ text: string }>(({ text }) => (
 ));
 MarkdownBlock.displayName = 'MarkdownBlock';
 
+/**
+ * Horizontally scrolling project row. Scrollability is signposted by a peek
+ * of the next card, edge fades, arrows that disable at the ends, a thin
+ * progress bar, and a one-time nudge.
+ */
 const ProjectDeck: React.FC<{ projects: typeof portfolioData.projects; onSelect: (p: any) => void }> = React.memo(({ projects, onSelect }) => {
-    const [currentIndex, setCurrentIndex] = React.useState(0);
-    const [itemsPerPage, setItemsPerPage] = React.useState(2);
+    const trackRef = useRef<HTMLDivElement>(null);
+    const thumbRef = useRef<HTMLDivElement>(null);
+    const rafRef = useRef(0);
+    const [edges, setEdges] = useState({ start: true, end: false, scrollable: true });
+    const [nudge] = useState(() => {
+        if (deckNudged) return false;
+        deckNudged = true;
+        return true;
+    });
 
-    React.useEffect(() => {
-        const handleResize = () => {
-            setItemsPerPage(window.innerWidth < 768 ? 1 : 2);
-        };
-        handleResize(); // Initial check
-        window.addEventListener('resize', handleResize);
-        return () => window.removeEventListener('resize', handleResize);
+    // Scroll position -> edge state (React) + progress thumb (direct DOM, no re-render)
+    const update = useCallback(() => {
+        rafRef.current = 0;
+        const el = trackRef.current;
+        if (!el) return;
+        const max = el.scrollWidth - el.clientWidth;
+        const next = { start: el.scrollLeft <= 2, end: el.scrollLeft >= max - 2, scrollable: max > 2 };
+        setEdges(prev => (prev.start === next.start && prev.end === next.end && prev.scrollable === next.scrollable ? prev : next));
+        const thumb = thumbRef.current;
+        if (thumb && max > 0) {
+            const frac = el.clientWidth / el.scrollWidth;
+            thumb.style.width = `${frac * 100}%`;
+            thumb.style.transform = `translateX(${(el.scrollLeft / max) * ((1 - frac) / frac) * 100}%)`;
+        }
     }, []);
 
-    const maxIndex = Math.max(0, projects.length - itemsPerPage);
+    const onScroll = useCallback(() => {
+        if (!rafRef.current) rafRef.current = requestAnimationFrame(update);
+    }, [update]);
 
-    const nextSlide = () => {
-        if (currentIndex < maxIndex) {
-            setCurrentIndex(prev => prev + 1);
-        }
+    useEffect(() => {
+        const el = trackRef.current;
+        if (!el) return;
+        const ro = new ResizeObserver(onScroll);
+        ro.observe(el);
+        return () => { ro.disconnect(); cancelAnimationFrame(rafRef.current); };
+    }, [onScroll]);
+
+    const scrollBy = (dir: 1 | -1) => {
+        const el = trackRef.current;
+        if (el) el.scrollBy({ left: dir * el.clientWidth * 0.8, behavior: 'smooth' });
     };
 
-    const prevSlide = () => {
-        if (currentIndex > 0) {
-            setCurrentIndex(prev => prev - 1);
-        }
-    };
+    const arrow = 'size-8 grid place-items-center rounded-full border border-line text-muted hover:text-fg hover:bg-hover disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-muted transition-[opacity,color,background-color] duration-200';
+    const fade = 'pointer-events-none absolute inset-y-0 w-10 sm:w-14 z-10 transition-opacity duration-300';
 
     return (
-        <div className="relative w-full max-w-[640px] mx-auto my-6">
+        <div className="my-4">
+            <div className="flex items-center justify-between mb-3">
+                <span className="text-sm text-subtle">{projects.length} projects</span>
+                {edges.scrollable && (
+                    <div className="hidden sm:flex gap-1.5">
+                        <button onClick={() => scrollBy(-1)} disabled={edges.start} className={arrow} aria-label="Previous projects"><ChevronLeft size={16} /></button>
+                        <button onClick={() => scrollBy(1)} disabled={edges.end} className={arrow} aria-label="Next projects"><ChevronRight size={16} /></button>
+                    </div>
+                )}
+            </div>
 
-            {/* Main Stage - Shows 2 cards (desktop) or 1 (mobile) */}
-            <div className="overflow-hidden rounded-xl border border-gray-800 bg-gray-900/50 backdrop-blur-sm relative h-80 sm:h-96">
+            <div className="relative -mx-4 sm:mx-0">
+                <div className={`${fade} left-0 bg-gradient-to-r from-bg to-transparent ${edges.start ? 'opacity-0' : 'opacity-100'}`} />
+                <div className={`${fade} right-0 bg-gradient-to-l from-bg to-transparent ${edges.end || !edges.scrollable ? 'opacity-0' : 'opacity-100'}`} />
                 <div
-                    className="flex transition-transform duration-500 ease-in-out h-full"
-                    style={{ transform: `translateX(-${currentIndex * (100 / itemsPerPage)}%)` }}
+                    ref={trackRef}
+                    onScroll={onScroll}
+                    tabIndex={0}
+                    aria-label="Projects, scroll sideways"
+                    className="scrollbar-hide overflow-x-auto overscroll-x-contain snap-x snap-mandatory scroll-px-4 sm:scroll-px-0 px-4 sm:px-0 rounded-2xl"
                 >
-                    {projects.map((p) => (
-                        <div
-                            key={p.id}
-                            className={`shrink-0 p-3 flex items-center justify-center h-full ${itemsPerPage === 1 ? 'w-full' : 'w-1/2'}`}
-                        >
-                            <div className="w-full h-full transform transition-all duration-300 hover:scale-105">
+                    <div className={`flex gap-3 ${nudge ? 'deck-nudge' : ''}`}>
+                        {projects.map((p) => (
+                            <div key={p.id} className="snap-start shrink-0 w-[78%] sm:w-[44%]">
                                 <ProjectCard project={p} onClick={() => onSelect(p)} />
                             </div>
-                        </div>
-                    ))}
+                        ))}
+                        {/* Trailing spacer so the last card can snap fully into view on mobile */}
+                        <div className="shrink-0 w-1 sm:hidden" aria-hidden />
+                    </div>
                 </div>
             </div>
 
-            {/* Navigation Controls */}
-            <button
-                onClick={prevSlide}
-                disabled={currentIndex === 0}
-                className="absolute left-1 sm:-left-12 top-1/2 -translate-y-1/2 p-2 sm:p-3 text-white disabled:opacity-20 hover:text-blue-400 transition-colors z-20 bg-black/60 sm:bg-black/50 backdrop-blur-sm rounded-full shadow-lg"
-            >
-                <ChevronLeft size={24} className="sm:w-7 sm:h-7" />
-            </button>
-
-            <button
-                onClick={nextSlide}
-                disabled={currentIndex >= maxIndex}
-                className="absolute right-1 sm:-right-12 top-1/2 -translate-y-1/2 p-2 sm:p-3 text-white disabled:opacity-20 hover:text-blue-400 transition-colors z-20 bg-black/60 sm:bg-black/50 backdrop-blur-sm rounded-full shadow-lg"
-            >
-                <ChevronRight size={24} className="sm:w-7 sm:h-7" />
-            </button>
-
-            {/* Pagination Dots - One dot per slide position */}
-            <div className="flex justify-center gap-2 mt-4">
-                {Array.from({ length: maxIndex + 1 }).map((_, idx) => (
-                    <button
-                        key={idx}
-                        onClick={() => setCurrentIndex(idx)}
-                        className={`w-2 h-2 rounded-full transition-all duration-300 ${idx === currentIndex ? 'bg-blue-500 w-6' : 'bg-gray-700 hover:bg-gray-500'
-                            }`}
-                    />
-                ))}
-            </div>
+            {edges.scrollable && (
+                <div className="mt-3 h-[3px] rounded-full bg-line overflow-hidden" aria-hidden>
+                    <div ref={thumbRef} className="h-full rounded-full bg-subtle/70" style={{ width: '40%' }} />
+                </div>
+            )}
         </div>
     );
 });
 ProjectDeck.displayName = 'ProjectDeck';
 
-const RichMessageContent: React.FC<{ content: string; onProjectSelect?: (project: any) => void }> = ({ content, onProjectSelect }) => {
-    // Memoize the expensive parsing logic
+const RichMessageContent: React.FC<{ content: string; streaming?: boolean; onProjectSelect?: (project: any) => void }> = ({ content, streaming, onProjectSelect }) => {
     const parts = useMemo(() => {
         if (!content) return [];
-        return content.split(/({{PROJECTS}}|{{SKILLS}}|{{RESUME}}|{{EXPERIENCE}}|{{BIO}}|{{CERTIFICATIONS}}|{{HOBBIES}}|{{GITHUB}})/g);
-    }, [content]);
+        const text = streaming ? content.replace(PARTIAL_TAG, '') : content;
+        return text.split(/({{PROJECTS}}|{{SKILLS}}|{{RESUME}}|{{EXPERIENCE}}|{{BIO}}|{{CERTIFICATIONS}}|{{HOBBIES}}|{{GITHUB}})/g);
+    }, [content, streaming]);
 
     return (
-        <div className="whitespace-pre-wrap">
+        <>
             {parts.map((part, index) => {
-                if (part === '{{PROJECTS}}') {
-                    return (
-                        <div key={index} className="mt-6 mb-2">
-                            {/* onProjectSelect is a stable setState fn, so the deck memoises cleanly */}
-                            <ProjectDeck projects={portfolioData.projects} onSelect={onProjectSelect ?? noop} />
-                        </div>
-                    );
-                }
-                if (part === '{{BIO}}') {
-                    return (
-                        <div key={index} className="mt-6 mb-2">
-                            <BioCard />
-                        </div>
-                    );
-                }
-                if (part === '{{EXPERIENCE}}') {
-                    return (
-                        <div key={index} className="mt-6 mb-2">
-                            <ExperienceTimeline experiences={portfolioData.experience} />
-                        </div>
-                    );
-                }
-
-                if (part === '{{SKILLS}}') {
-                    return (
-                        <div key={index} className="mt-4 not-prose">
-                            <SkillsDisplay skills={portfolioData.skills} />
-                        </div>
-                    );
-                }
-                if (part === '{{CERTIFICATIONS}}') {
-                    return (
-                        <div key={index} className="mt-4 not-prose">
-                            <CertificationDisplay certifications={portfolioData.certifications} />
-                        </div>
-                    );
-                }
-                if (part === '{{HOBBIES}}') {
-                    return (
-                        <div key={index} className="w-full">
-                            <InteractiveHobbies hobbies={portfolioData.hobbies as any} />
-                        </div>
-                    );
-                }
-                if (part === '{{GITHUB}}') {
-                    return (
-                        <div key={index} className="w-full mt-4">
-                            <GithubWidget />
-                        </div>
-                    );
-                }
-                if (part === '{{RESUME}}') {
-                    return (
-                        <div key={index} className="mt-4 not-prose">
-                            <a
-                                href={portfolioData.resumeUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-2 px-6 py-3 bg-white text-black font-bold rounded-lg hover:bg-gray-200 transition-colors"
-                            >
-                                <Download size={20} />
-                                Download Resume
-                            </a>
-                        </div>
-                    );
+                switch (part) {
+                    case '{{PROJECTS}}':
+                        return <div key={index} className="msg-in"><ProjectDeck projects={portfolioData.projects} onSelect={onProjectSelect ?? noop} /></div>;
+                    case '{{BIO}}':
+                        return <div key={index} className="msg-in my-4"><BioCard /></div>;
+                    case '{{EXPERIENCE}}':
+                        return <div key={index} className="msg-in my-4"><ExperienceTimeline experiences={portfolioData.experience} /></div>;
+                    case '{{SKILLS}}':
+                        return <div key={index} className="msg-in my-4"><SkillsDisplay skills={portfolioData.skills} /></div>;
+                    case '{{CERTIFICATIONS}}':
+                        return <div key={index} className="msg-in my-4"><CertificationDisplay certifications={portfolioData.certifications} /></div>;
+                    case '{{HOBBIES}}':
+                        return <div key={index} className="msg-in my-4"><InteractiveHobbies hobbies={portfolioData.hobbies as any} /></div>;
+                    case '{{GITHUB}}':
+                        return <div key={index} className="msg-in my-4"><GithubWidget /></div>;
+                    case '{{RESUME}}':
+                        return <div key={index} className="msg-in my-4"><ResumeCard /></div>;
                 }
                 if (!part.trim()) return null;
-
-                return (
-                    <div key={index} className="inline-block w-full">
-                        {splitBlocks(part).map((block, bi) => (
-                            <MarkdownBlock key={bi} text={block} />
-                        ))}
-                    </div>
-                );
+                return splitBlocks(part).map((block, bi) => <MarkdownBlock key={`${index}-${bi}`} text={block} />);
             })}
-        </div>
+        </>
     );
 };
 
-// Use React.memo for the entire message component to prevent re-renders of old messages during streaming
-const ChatMessage: React.FC<ChatMessageProps> = React.memo(({ role, content, onProjectSelect }) => {
-    const containerRef = useRef<HTMLDivElement>(null);
-
-    useGSAP(() => {
-        const tier = motionTier();
-        if (tier === 'off') return;
-
-        if (role === 'user') {
-            // User message snaps in from the right with an elastic settle
-            gsap.from(containerRef.current, {
-                x: tier === 'lite' ? 18 : 36,
-                y: 10,
-                opacity: 0,
-                scale: 0.94,
-                transformOrigin: 'right center',
-                duration: tier === 'lite' ? 0.4 : 0.7,
-                ease: tier === 'lite' ? 'power3.out' : 'agentOut',
-                clearProps: 'transform',
-            });
-        } else {
-            // Agent message rises in. Deliberately transform + opacity only:
-            // this bubble keeps growing while the response streams, and animating
-            // a CSS `filter` blur re-rasterises the whole markdown subtree on
-            // every frame of the entrance.
-            gsap.fromTo(containerRef.current,
-                { y: 22, opacity: 0, scale: 0.985 },
-                {
-                    y: 0, opacity: 1, scale: 1,
-                    duration: tier === 'lite' ? 0.4 : 0.6,
-                    ease: 'power3.out',
-                    clearProps: 'transform',
+const CopyButton: React.FC<{ text: string }> = ({ text }) => {
+    const [copied, setCopied] = useState(false);
+    return (
+        <button
+            onClick={() => {
+                navigator.clipboard?.writeText(text).then(() => {
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 1500);
                 });
-        }
-    }, { scope: containerRef });
+            }}
+            className="p-1.5 rounded-lg text-subtle hover:text-fg hover:bg-hover transition-colors"
+            aria-label={copied ? 'Copied' : 'Copy'}
+            title={copied ? 'Copied' : 'Copy'}
+        >
+            {copied ? <Check size={15} /> : <Copy size={15} />}
+        </button>
+    );
+};
+
+// Memoised so finished messages don't re-render while a new one streams
+const ChatMessage: React.FC<ChatMessageProps> = React.memo(({ role, content, isStreaming, isLatest, trace, onProjectSelect }) => {
+    if (role === 'user') {
+        return (
+            <div className="msg-in flex justify-end">
+                <div className="max-w-[85%] sm:max-w-[70%] rounded-3xl bg-raised px-5 py-2.5 text-base leading-7 text-fg whitespace-pre-wrap">
+                    {content}
+                </div>
+            </div>
+        );
+    }
+
+    return <AgentMessage content={content} isStreaming={isStreaming} isLatest={isLatest} trace={trace} onProjectSelect={onProjectSelect} />;
+});
+
+const AgentMessage: React.FC<Omit<ChatMessageProps, 'role'>> = ({ content, isStreaming, isLatest, trace, onProjectSelect }) => {
+    // Streamed answers reveal themselves by typing in, and they take over the
+    // exact spot the thinking indicator held; fading them in too reads as a
+    // blink. Only content that arrives whole (forms, errors) eases in.
+    const [arrivedWhole] = useState(!isStreaming);
+    const copyText = typeof content === 'string' ? content.replace(TAG, '').trim() : '';
 
     return (
-        <div ref={containerRef} className={`flex w-full mb-5 ${role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`flex max-w-[88%] md:max-w-[76%] gap-2.5 ${role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-
-                {/* Avatar */}
-                <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center shrink-0 overflow-hidden ${
-                    role === 'agent'
-                        ? 'ring-1 ring-[#232323]'
-                        : 'bg-[#141414] border border-[#232323] text-[#8a8a85]'
-                }`}>
-                    {role === 'agent'
-                        ? <img src={meImg} className="w-full h-full object-cover rounded-full" alt="Agent" />
-                        : <User size={15} />
-                    }
-                </div>
-
-                {/* Bubble */}
-                <div className={`flex flex-col gap-1 ${role === 'user' ? 'items-end' : 'items-start'}`}>
-                    <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed ${
-                        role === 'agent'
-                            ? 'bg-[#121212] border border-[#232323] text-[#d6d5cf] rounded-tl-sm'
-                            : 'bg-[#f2f1ec] text-[#0a0a0a] rounded-tr-sm font-medium shadow-sm'
-                    }`}>
-                        {role === 'agent' && typeof content === 'string' ? (
-                            <RichMessageContent content={content} onProjectSelect={onProjectSelect} />
-                        ) : (
-                            content
-                        )}
-                    </div>
-                </div>
-
+        <div className="group">
+            {trace && <ThoughtSummary trace={trace} />}
+            <div className={`text-base leading-7 text-fg ${arrivedWhole ? 'msg-in' : ''}`}>
+                {typeof content === 'string'
+                    ? <RichMessageContent content={content} streaming={isStreaming} onProjectSelect={onProjectSelect} />
+                    : content}
             </div>
+            {!isStreaming && copyText && (
+                <div className={`mt-1.5 -ml-1.5 flex transition-opacity ${isLatest ? '' : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100'}`}>
+                    <CopyButton text={copyText} />
+                </div>
+            )}
         </div>
     );
-});
+};
 
 export default ChatMessage;

@@ -5,13 +5,22 @@
   <meta charset="UTF-8" />
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="theme-color" content="#0a0a0a" />
+  <meta name="theme-color" content="#ffffff" />
 
-  <!-- Above-the-fold faces: start the font fetch with the HTML instead of
-       waiting for the stylesheet to parse. Both are variable, so these two
-       files cover every weight the site uses. -->
+  <!-- Apply the stored / system theme before first paint so there's no flash -->
+  <script>
+    try {
+      var t = localStorage.getItem('agentfolio-theme');
+      if (t === 'dark' || (t !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches)) {
+        document.documentElement.classList.add('dark');
+        document.querySelector('meta[name="theme-color"]').setAttribute('content', '#212121');
+      }
+    } catch (e) {}
+  </script>
+
+  <!-- Above-the-fold face: start the font fetch with the HTML instead of
+       waiting for the stylesheet to parse. -->
   <link rel="preload" href="/fonts/Satoshi-Variable.woff2" as="font" type="font/woff2" crossorigin />
-  <link rel="preload" href="/fonts/ClashDisplay-Variable.woff2" as="font" type="font/woff2" crossorigin />
 
   <title>AgentFolio</title>
   <meta name="description"

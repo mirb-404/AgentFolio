@@ -1,18 +1,17 @@
 import React, { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
-import { useGSAP } from '@gsap/react';
-import { gsap, SplitText, motionTier, burstAt, isHidden, beginHeavyMoment } from '../lib/motion';
+import { User, FolderGit2, Briefcase, Github, Mail, ArrowDown } from 'lucide-react';
+import { isHidden, motionTier } from '../lib/motion';
+import { withViewTransition } from '../lib/viewTransition';
 import ChatMessage from './ChatMessage';
-import ActionButtons from './ActionButtons';
-import ThinkingVisualizer from './ThinkingVisualizer';
-import Sidebar from './Sidebar';
-import CommandPalette from './CommandPalette';
+import Composer from './Composer';
 import ContactForm from './ContactForm';
-import { portfolioData, suggestPrompts } from '../data/portfolioData';
-import { Send, Terminal, Menu, ChevronLeft, Activity } from 'lucide-react';
+import { ThinkingIndicator, type Trace } from './Thinking';
+import { TONE_PROMPTS, type Tone } from '../lib/tone';
+import { portfolioData } from '../data/portfolioData';
+import { githubActivityToolDefinition, fetchGithubActivity } from './githubAgent';
 
 const MatrixEffect = lazy(() => import('./MatrixEffect'));
 const ProjectDetailModal = lazy(() => import('./ProjectDetailModal'));
-import { githubActivityToolDefinition, fetchGithubActivity } from './githubAgent';
 
 type Message = {
     id: string;
@@ -21,202 +20,136 @@ type Message = {
     isStreaming?: boolean;
     name?: string; // For tool responses
     tool_calls?: any[]; // To track when the LLM decides to use a tool
+    trace?: Trace;
 };
 
 interface ChatInterfaceProps {
-    hasStarted: boolean;
-    onStart: () => void;
+    tone: Tone;
     activePrompt: string | null;
     onPromptHandled: () => void;
-    isSidebarOpen: boolean;
-    setIsSidebarOpen: (isOpen: boolean) => void;
 }
 
-/** Tool-name chip that decodes in with a scramble effect */
-const ScrambleLabel: React.FC<{ text: string }> = ({ text }) => {
-    const ref = useRef<HTMLSpanElement>(null);
-    useGSAP(() => {
-        if (!ref.current || motionTier() === 'off') return;
-        gsap.fromTo(ref.current.parentElement,
-            { scale: 0.6, opacity: 0 },
-            { scale: 1, opacity: 1, duration: 0.5, ease: 'back.out(2.2)' }
-        );
-        gsap.to(ref.current, {
-            duration: 0.7,
-            scrambleText: { text, chars: '01<>/_$#&', speed: 0.5 },
-            ease: 'none',
-        });
-    }, [text]);
-    return <span ref={ref}>{text}</span>;
+const SUGGESTIONS = [
+    { label: 'About me', prompt: 'Tell me about yourself', Icon: User },
+    { label: 'Projects', prompt: 'Show me your projects', Icon: FolderGit2 },
+    { label: 'Experience', prompt: 'Tell me about your experience', Icon: Briefcase },
+    { label: "What he's building", prompt: 'Recent GitHub Activity', Icon: Github },
+    { label: 'Get in touch', prompt: 'Contact me', Icon: Mail },
+];
+
+const WRITING = 'Writing response…';
+// Autofocus only where it can't pop a virtual keyboard over the page
+const canHover = typeof window !== 'undefined' && window.matchMedia('(hover: hover)').matches;
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+// rAF is suspended in background tabs — fall back to a timer so answers still land
+const schedule = (fn: () => void) => {
+    if (isHidden()) window.setTimeout(fn, 100);
+    else requestAnimationFrame(fn);
 };
 
-/**
- * The chat composer owns its own draft text.
- * Keeping `inputValue` in ChatInterface meant every keystroke re-rendered the
- * whole transcript, the suggestion rail and the sidebar — that is the lag you
- * feel while typing.
- */
-const ChatInput = React.memo<{ onSend: (text: string) => void; disabled: boolean }>(({ onSend, disabled }) => {
-    const [value, setValue] = useState("");
-    const sendBtnRef = useRef<HTMLButtonElement>(null);
+/** The visible steps for a canned answer, keyed off the widget it renders */
+const planFor = (response: string): string[] => {
+    const { projects, experience, skills, certifications } = portfolioData;
+    if (response.includes('{{PROJECTS}}')) return ['Searching projects…', `Found ${projects.length} projects`];
+    if (response.includes('{{EXPERIENCE}}')) return ['Looking up work history…', `${experience.length} roles found`];
+    if (response.includes('{{SKILLS}}')) return ['Reading tech stack…', `${skills.length} areas`];
+    if (response.includes('{{CERTIFICATIONS}}')) return ['Checking certifications…', `${certifications.length} found`];
+    if (response.includes('{{BIO}}')) return ['Loading profile…'];
+    if (response.includes('{{HOBBIES}}')) return ['Looking up interests…'];
+    if (response.includes('{{CONTACT_FORM}}')) return ['Preparing contact form…'];
+    if (response.includes('{{RESUME}}')) return ['Fetching résumé…'];
+    return ['Searching knowledge base…'];
+};
 
-    const submit = (e: React.FormEvent) => {
-        e.preventDefault();
-        const text = value;
-        if (!text.trim()) return;
-        if (sendBtnRef.current) {
-            const r = sendBtnRef.current.getBoundingClientRect();
-            burstAt(r.left + r.width / 2, r.top + r.height / 2);
-        }
-        setValue("");
-        onSend(text);
-    };
-
-    return (
-        <form
-            onSubmit={submit}
-            className="flex gap-2 mt-1.5 relative items-center bg-[#0f0f0f] p-1.5 rounded-xl border border-[#232323] focus-within:border-[#22d3ee]/35 focus-within:ring-1 focus-within:ring-[#22d3ee]/10 transition-all duration-200"
-        >
-            <input
-                type="text"
-                value={value}
-                onChange={(e) => setValue(e.target.value)}
-                placeholder="Ask me anything..."
-                disabled={disabled}
-                className="flex-1 bg-transparent text-[#f2f1ec] px-3 py-2 text-sm sm:text-[15px] outline-none placeholder:text-[#555550] font-sans disabled:opacity-40 disabled:cursor-not-allowed"
-            />
-            <button
-                ref={sendBtnRef}
-                type="submit"
-                disabled={!value.trim() || disabled}
-                data-magnetic
-                className="p-2 sm:p-2.5 bg-[#22d3ee] text-[#0a0a0a] rounded-xl hover:bg-[#67e8f9] disabled:opacity-30 disabled:cursor-not-allowed transition-colors shrink-0"
-            >
-                <Send size={14} className="sm:hidden" />
-                <Send size={15} className="hidden sm:block" />
-            </button>
-        </form>
-    );
-});
-ChatInput.displayName = 'ChatInput';
-
-/** Fake-real telemetry strip under the chat input */
-const StatusBar = React.memo(() => {
-    const [ms, setMs] = useState(24);
-    useEffect(() => {
-        const id = setInterval(() => setMs(16 + Math.round(Math.random() * 26)), 3200);
-        return () => clearInterval(id);
-    }, []);
-    return (
-        <div className="flex items-center justify-between px-2.5 pt-1.5 text-[10px] font-mono text-[#555550]">
-            <span className="flex items-center gap-1.5">
-                <span className="relative flex w-1.5 h-1.5">
-                    <span className="absolute inline-flex h-full w-full rounded-full bg-[#22d3ee] opacity-60 animate-status-ping" />
-                    <span className="relative inline-flex w-1.5 h-1.5 rounded-full bg-[#22d3ee]" />
-                </span>
-                agent online · llama-3.1-8b
-            </span>
-            <span>edge cache · {ms}ms</span>
-        </div>
-    );
-});
-StatusBar.displayName = 'StatusBar';
-
-
-const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, activePrompt, onPromptHandled, isSidebarOpen, setIsSidebarOpen }) => {
+const ChatInterface: React.FC<ChatInterfaceProps> = ({ tone, activePrompt, onPromptHandled }) => {
     const [messages, setMessages] = useState<Message[]>([]);
     const [isTyping, setIsTyping] = useState(false);
+    const [liveLabel, setLiveLabel] = useState<string | null>(null);
     const [showMatrix, setShowMatrix] = useState(false);
     const [selectedProject, setSelectedProject] = useState<any>(null);
-    const [isFetchingTool, setIsFetchingTool] = useState(false); // New state for tool execution UI
-    const [fakeToolName, setFakeToolName] = useState(""); // Track fake tool names for the UI
 
-    const busy = isTyping || isFetchingTool;
+    const busy = isTyping;
+    const isEmpty = messages.length === 0;
 
-    // Refs for animations
-    const containerRef = useRef<HTMLDivElement>(null);
-    const heroRef = useRef<HTMLDivElement>(null);
-    const nameRef = useRef<HTMLHeadingElement>(null);
-    const inputDockRef = useRef<HTMLDivElement>(null);
-    const chatRef = useRef<HTMLDivElement>(null);
-    const bottomRef = useRef<HTMLDivElement>(null);
     const abortControllerRef = useRef<AbortController | null>(null);
-    // First message from the hero is held until the world transition finishes
-    const pendingPromptRef = useRef<string | null>(null);
-    // Only one SplitText may own the headline at a time — overlapping splits
-    // (entrance vs shatter vs return-home) nest wrappers and corrupt the text metrics
-    const activeSplitRef = useRef<SplitText | null>(null);
-    const releaseSplit = () => {
-        activeSplitRef.current?.revert();
-        activeSplitRef.current = null;
-    };
-    // Scroll handling
-    const messagesContainerRef = useRef<HTMLDivElement>(null);
-    const messagesContentRef = useRef<HTMLDivElement>(null);
-    const shouldAutoScrollRef = useRef(true);
-    // Latest transcript, readable from the stable callbacks below without
-    // making them depend on (and be rebuilt by) every state change
+    // Each send gets a run id; Stop / New chat bump it so in-flight work
+    // notices it's stale after every await and quietly bails
+    const runRef = useRef(0);
+    const traceRef = useRef<{ steps: string[]; start: number }>({ steps: [], start: 0 });
+    const toneRef = useRef(tone);
+    toneRef.current = tone;
+
     const messagesRef = useRef<Message[]>(messages);
     messagesRef.current = messages;
 
-    // Every "keep the transcript pinned" request funnels through one rAF, so a
-    // burst of stream chunks costs a single layout read + scroll write per frame
-    // instead of one per chunk.
-    const stickRafRef = useRef(0);
-    const stickToBottom = useCallback(() => {
-        if (stickRafRef.current) return;
-        stickRafRef.current = requestAnimationFrame(() => {
-            stickRafRef.current = 0;
-            const el = messagesContainerRef.current;
-            if (!el || !shouldAutoScrollRef.current) return;
-            // A smooth scroll from a new message owns the position while it runs;
-            // writing scrollTop underneath it makes the two fight and judder.
-            if (gsap.isTweening(el)) return;
-            el.scrollTop = el.scrollHeight - el.clientHeight;
-        });
+    // Abandon in-flight work when the chat is reset (remounted)
+    useEffect(() => () => {
+        runRef.current++;
+        abortControllerRef.current?.abort();
     }, []);
 
-    // Widgets (project decks, timelines, charts) grow well after the stream ends —
-    // track content height so the output stays in view instead of hiding below the fold.
-    // This also covers plain text growth during streaming, so nothing else needs
-    // to chase the scroll position while a response is arriving.
+    // --- Scroll follow --------------------------------------------------------
+    // One rAF loop eases the transcript toward the bottom while "following".
+    // New messages, streamed text and late-growing widgets all just kick the
+    // loop, so there is never a second scroll animation to fight with.
+    const scrollerRef = useRef<HTMLDivElement>(null);
+    const contentRef = useRef<HTMLDivElement>(null);
+    const followingRef = useRef(true);
+    const followRafRef = useRef(0);
+    const lastTopRef = useRef(0);
+    const [showJump, setShowJump] = useState(false);
+
+    const measure = useCallback(() => {
+        const el = scrollerRef.current;
+        if (!el) return;
+        setShowJump(el.scrollHeight - el.scrollTop - el.clientHeight > 240);
+    }, []);
+
+    const followTick = useCallback(() => {
+        followRafRef.current = 0;
+        const el = scrollerRef.current;
+        if (!el || !followingRef.current) return;
+        const target = el.scrollHeight - el.clientHeight;
+        const diff = target - el.scrollTop;
+        if (diff <= 1) return;
+        // Ease ~22% of the remaining distance per frame; reduced motion jumps
+        const next = motionTier() === 'off' ? target : el.scrollTop + Math.max(1, diff * 0.22);
+        el.scrollTop = Math.min(target, Math.ceil(next));
+        lastTopRef.current = el.scrollTop;
+        followRafRef.current = requestAnimationFrame(followTick);
+    }, []);
+
+    const kickFollow = useCallback(() => {
+        if (!followRafRef.current) followRafRef.current = requestAnimationFrame(followTick);
+    }, [followTick]);
+
     useEffect(() => {
-        const content = messagesContentRef.current;
+        const content = contentRef.current;
         if (!content) return;
-        const observer = new ResizeObserver(stickToBottom);
+        const observer = new ResizeObserver(() => { kickFollow(); measure(); });
         observer.observe(content);
         return () => {
             observer.disconnect();
-            if (stickRafRef.current) cancelAnimationFrame(stickRafRef.current);
+            cancelAnimationFrame(followRafRef.current);
+            followRafRef.current = 0;
         };
-    }, [stickToBottom]);
+    }, [kickFollow, measure, isEmpty]);
 
-    const scrollToBottom = useCallback(() => {
-        const el = messagesContainerRef.current;
-        if (!el) return;
-        gsap.to(el, {
-            scrollTop: el.scrollHeight - el.clientHeight,
-            duration: 0.55,
-            ease: 'power3.out',
-            overwrite: 'auto',
-        });
-    }, []);
-
-    // Scroll intent: only a deliberate upward gesture disables follow mode.
-    // (The old onScroll check raced with our own smooth-scroll tween and the
-    // ResizeObserver — mid-tween positions read as "not at bottom" and killed follow.)
     const handleScroll = () => {
-        if (messagesContainerRef.current) {
-            const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
-            if (scrollHeight - scrollTop - clientHeight < 100) {
-                shouldAutoScrollRef.current = true; // re-engage when user returns to bottom
-            }
-        }
+        const el = scrollerRef.current;
+        if (!el) return;
+        // Moving up by something other than our own writes = the visitor scrolled
+        if (el.scrollTop < lastTopRef.current - 2) followingRef.current = false;
+        if (el.scrollHeight - el.scrollTop - el.clientHeight < 40) followingRef.current = true;
+        lastTopRef.current = el.scrollTop;
+        measure();
     };
-    const disengageFollow = () => { shouldAutoScrollRef.current = false; };
+    const disengageFollow = () => { followingRef.current = false; };
+    const jumpToBottom = () => { followingRef.current = true; kickFollow(); };
     const touchStartYRef = useRef(0);
 
-    // Handle External Prompts (Sidebar)
+    // Prompts from the sidebar
     useEffect(() => {
         if (activePrompt) {
             handleSendMessage(activePrompt);
@@ -224,272 +157,94 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, acti
         }
     }, [activePrompt]);
 
-    // Entrance — splash hands off to a staged hero reveal (runs once on mount).
-    // SplitText must measure the real webfont, so everything starts hidden and
-    // the reveal waits for fonts (instant when the splash already loaded them).
-    useGSAP((_, contextSafe) => {
-        if (motionTier() === 'off' || hasStarted) return;
-
-        gsap.set(nameRef.current, { autoAlpha: 0 });
-        gsap.set('[data-hero-item]', { autoAlpha: 0 });
-
-        let cancelled = false;
-        const fontsReady = document.fonts?.ready ?? Promise.resolve();
-        const safety = new Promise((r) => setTimeout(r, 2500));
-
-        Promise.race([fontsReady, safety]).then(contextSafe!(() => {
-            // bail if the user already jumped into the chat — the return
-            // cascade owns the hero reveal from here on
-            if (cancelled || prevStartedRef.current || !nameRef.current) return;
-            const tl = gsap.timeline({ defaults: { ease: 'power3.out' } });
-
-            // Name rises out of a per-char mask — metrics are now correct
-            gsap.set(nameRef.current, { autoAlpha: 1 });
-            const split = new SplitText(nameRef.current, { type: 'chars', mask: 'chars' });
-            activeSplitRef.current = split;
-            tl.from(split.chars, {
-                yPercent: 110,
-                duration: 0.9,
-                stagger: { amount: 0.28, from: 'center' },
-                ease: 'power4.out',
-                onComplete: () => {
-                    if (activeSplitRef.current === split) releaseSplit();
-                },
-            }, 0.1);
-
-            tl.fromTo('[data-hero-item]',
-                { autoAlpha: 0, y: 26 },
-                { autoAlpha: 1, y: 0, duration: 0.7, stagger: 0.1, clearProps: 'opacity,visibility,transform' },
-                0.35);
-        }));
-
-        return () => { cancelled = true; };
-    }, { scope: containerRef });
-
-    // GSAP Transitions — hero shatters into the warp jump, chat materializes after
-    const prevStartedRef = useRef(false);
-    const transitionTlRef = useRef<gsap.core.Timeline | null>(null);
-    useGSAP((_, contextSafe) => {
-        const tier = motionTier();
-        const wasStarted = prevStartedRef.current;
-        prevStartedRef.current = hasStarted;
-
-        // A direction change mid-flight (e.g. home clicked while the chat is still
-        // materializing) must kill the old timeline — otherwise both worlds keep
-        // animating and the layout ends up half-and-half
-        transitionTlRef.current?.kill();
-        transitionTlRef.current = null;
-
-        if (hasStarted) {
-            // Everything below is deferred by one frame. This effect runs as a
-            // layout effect, so it would otherwise pile onto the very frame React
-            // is already committing the world swap in — new header subtree, warp
-            // canvas waking, plus SplitText measuring the 80px headline
-            // synchronously. Two spikes in one frame is the hitch you feel on
-            // Enter; giving the browser its paint first splits them apart, at a
-            // cost of ~6ms nobody can perceive.
-            const releaseHeavy = beginHeavyMoment();
-            let raf = 0;
-
-            // contextSafe keeps the deferred timeline inside useGSAP's context, so
-            // `[data-hero-item]` still resolves against the scope and the tweens
-            // are still tracked for cleanup despite running a frame later.
-            const build = contextSafe!(() => {
-                const tl = gsap.timeline({
-                    onComplete: releaseHeavy,
-                    onInterrupt: releaseHeavy,
-                });
-                transitionTlRef.current = tl;
-
-                if (tier === 'full' && nameRef.current) {
-                    // Name slips up through a per-char mask — quiet exit, mirrors the entrance.
-                    // Release any split still owning the headline (e.g. entrance mid-flight) first.
-                    releaseSplit();
-                    const split = new SplitText(nameRef.current, { type: 'chars', mask: 'chars' });
-                    activeSplitRef.current = split;
-                    tl.to(split.chars, {
-                        yPercent: -110,
-                        duration: 0.55,
-                        ease: 'power2.in',
-                        stagger: { amount: 0.14, from: 'center' },
-                    }, 0)
-                        // The rest of the hero gets pulled into the jump — recede + fade.
-                        // Transform/opacity only: these elements include the command
-                        // palette with its live shine ring, and a `filter` tween would
-                        // re-rasterise all of it every frame, on top of the warp jump.
-                        .to('[data-hero-item]', {
-                            opacity: 0,
-                            y: -34,
-                            scale: 0.92,
-                            duration: 0.55,
-                            ease: 'power2.in',
-                            stagger: 0.045,
-                        }, 0.05)
-                        .set(heroRef.current, { display: 'none', pointerEvents: 'none' })
-                        .call(() => {
-                            if (activeSplitRef.current === split) releaseSplit();
-                        })
-                        .fromTo(chatRef.current,
-                            { opacity: 0, y: 26, scale: 0.985 },
-                            {
-                                display: 'flex', opacity: 1, y: 0, scale: 1,
-                                duration: 0.55, ease: 'agentOut', pointerEvents: 'all',
-                            })
-                        .fromTo(inputDockRef.current,
-                            { opacity: 0, y: 24 },
-                            { display: 'block', opacity: 1, y: 0, duration: 0.45, ease: 'agentOut' },
-                            '-=0.35')
-                        .call(flushPendingPrompt);
-                } else {
-                    // lite / off — fast clean swap
-                    const dur = tier === 'off' ? 0.01 : 0.35;
-                    tl.to(heroRef.current, {
-                        opacity: 0, y: -16, duration: dur,
-                        pointerEvents: 'none', display: 'none',
-                    })
-                        .to(chatRef.current, {
-                            display: 'flex', opacity: 1, y: 0,
-                            duration: dur, pointerEvents: 'all',
-                        })
-                        .to(inputDockRef.current, { display: 'block', opacity: 1, duration: dur }, '<')
-                        .call(flushPendingPrompt);
-                }
-            });
-
-            raf = requestAnimationFrame(build);
-            return () => {
-                cancelAnimationFrame(raf);
-                releaseHeavy();
-            };
-        } else {
-            // Initial mount: the entrance timeline owns the hero; chat is already hidden via CSS
-            if (!wasStarted) return;
-
-            // Headline must be plain text before the return cascade — a split interrupted
-            // mid-shatter would otherwise leave nested wrappers that distort font metrics
-            releaseSplit();
-
-            if (tier === 'off') {
-                gsap.set(chatRef.current, { display: 'none', opacity: 0, pointerEvents: 'none' });
-                gsap.set(inputDockRef.current, { display: 'none', opacity: 0 });
-                gsap.set('[data-hero-item]', { clearProps: 'all' });
-                gsap.set(heroRef.current, { display: 'flex', opacity: 1, y: 0, pointerEvents: 'all' });
-                return;
-            }
-
-            // Back to hero — chat dissolves down with blur, hero re-materializes in a cascade.
-            // Every hero element is parked in its hidden state BEFORE the hero becomes
-            // visible, so nothing flashes at full opacity and then re-animates.
-            const tl = gsap.timeline({ defaults: { ease: 'power3.out' } });
-            transitionTlRef.current = tl;
-            tl.to(chatRef.current, {
-                opacity: 0,
-                y: 16,
-                scale: 0.99,
-                duration: 0.35,
-                ease: 'power2.in',
-                display: 'none',
-                pointerEvents: 'none',
-                clearProps: 'transform',
-            })
-                .to(inputDockRef.current, { opacity: 0, y: 10, display: 'none', duration: 0.28, ease: 'power2.in' }, 0)
-                .set('[data-hero-item]', { clearProps: 'all' })
-                .set('[data-hero-item]', { autoAlpha: 0, y: 18 })
-                .set(nameRef.current, { autoAlpha: 0, y: 12 })
-                .set(heroRef.current, { display: 'flex', opacity: 1, y: 0, pointerEvents: 'all' })
-                .to(nameRef.current,
-                    { autoAlpha: 1, y: 0, duration: 0.55, clearProps: 'opacity,visibility,transform' })
-                .to('[data-hero-item]',
-                    { autoAlpha: 1, y: 0, duration: 0.5, stagger: 0.08, clearProps: 'opacity,visibility,transform' },
-                    '-=0.4');
-        }
-    }, { scope: containerRef, dependencies: [hasStarted] });
-
-    // Auto-scroll on new messages (start of generation).
-    // Growth *within* a message is handled by the ResizeObserver above — the old
-    // second effect re-ran on every chunk and forced a layout each time.
     useEffect(() => {
-        if (hasStarted) {
-            shouldAutoScrollRef.current = true;
-            scrollToBottom();
+        if (!isEmpty) {
+            followingRef.current = true;
+            kickFollow();
         }
-    }, [messages.length, hasStarted, scrollToBottom]);
+    }, [messages.length, isEmpty, kickFollow]);
+
+    // --- Thinking trace -------------------------------------------------------
+
+    const beginTrace = () => {
+        traceRef.current = { steps: [], start: performance.now() };
+    };
+    const addStep = (label: string) => {
+        traceRef.current.steps.push(label);
+        setLiveLabel(label);
+    };
+    /** Freeze the trace onto the message that ends the thinking phase */
+    const snapshotTrace = (writing: boolean): Trace | undefined => {
+        const { steps, start } = traceRef.current;
+        if (!steps.length) return undefined;
+        return { steps: writing ? [...steps, WRITING] : [...steps], ms: performance.now() - start };
+    };
+    const finish = () => {
+        setIsTyping(false);
+        setLiveLabel(null);
+    };
+
+    // --- Sending --------------------------------------------------------------
 
     const dispatchMessage = (text: string) => {
-        shouldAutoScrollRef.current = true;
-        scrollToBottom();
+        followingRef.current = true;
 
-        const userMsg: Message = {
-            id: Date.now().toString(),
-            role: 'user',
-            content: text
+        const userMsg: Message = { id: Date.now().toString(), role: 'user', content: text };
+        // The trace resets now; the visible state may land a frame later inside
+        // a view transition, and must not wipe steps added in the meantime
+        beginTrace();
+        const start = () => {
+            setMessages(prev => [...prev, userMsg]);
+            setIsTyping(true);
         };
+        // First message: the composer glides from the centre down to its dock
+        if (messagesRef.current.length === 0) withViewTransition(start);
+        else start();
 
-        setMessages(prev => [...prev, userMsg]);
-        setIsTyping(true);
-
-        const currentMessages = [...messagesRef.current, userMsg]; // Capture immediate state
-        generateResponseStream(text, currentMessages);
+        const run = ++runRef.current;
+        generateResponseStream(text, [...messagesRef.current, userMsg], run);
     };
 
-    // Runs from the world-transition timeline once the chat is actually visible
-    const flushPendingPrompt = () => {
-        const pending = pendingPromptRef.current;
-        pendingPromptRef.current = null;
-        if (pending) dispatchMessage(pending);
-    };
-
-    // The send path is handed to memoised children (composer, suggestion rail,
-    // sidebar, hero palette). Routing through a latest-value ref keeps its
-    // identity stable for the life of the component so none of them re-render
-    // while a response streams.
+    // Routed through a latest-value ref so the callback handed to memoised
+    // children keeps a stable identity while responses stream
     const sendRef = useRef<(text: string) => void>(() => {});
     sendRef.current = (text: string) => {
-        if (!text.trim()) return;
-
-        // Check for special commands before triggering onStart,
-        // so commands like 'matrix' don't navigate away from the hero page.
+        if (!text.trim() || busy) return;
         if (processCommand(text)) return;
-
-        if (!hasStarted) {
-            // Hold the message until the hero-shatter transition lands in the chat,
-            // so the user actually sees their prompt execute.
-            pendingPromptRef.current = text;
-            onStart();
-            return;
-        }
-
         dispatchMessage(text);
     };
     const handleSendMessage = useCallback((text: string) => sendRef.current(text), []);
-    const handleClearMessages = useCallback(() => setMessages([]), []);
-    const handleCloseSidebar = useCallback(() => setIsSidebarOpen(false), [setIsSidebarOpen]);
+
+    const handleStop = useCallback(() => {
+        runRef.current++;
+        abortControllerRef.current?.abort();
+        abortControllerRef.current = null;
+        setMessages(prev => prev
+            .filter(m => !(m.isStreaming && m.content === ''))
+            .map(m => (m.isStreaming ? { ...m, isStreaming: false } : m)));
+        finish();
+    }, []);
 
     const processCommand = (input: string): boolean => {
         const cmd = input.trim().toLowerCase();
-
-        if (cmd === 'clear' || cmd === 'cls' || cmd === 'flush_log') {
+        if (cmd === 'clear' || cmd === 'cls') {
             setMessages([]);
             return true;
         }
-
         if (cmd === 'matrix') {
             setShowMatrix(true);
             return true;
         }
-
         return false;
     };
 
     const getPredefinedResponse = (input: string): string | null => {
         const normalizedInput = input.trim().toLowerCase();
 
-        // 1. Commands
         if (normalizedInput === 'help') {
-            return `System Manual:\n\n- \`clear\`: Clear terminal\n- \`matrix\`: Enter the simulation`;
+            return `A few things you can type:\n\n- \`clear\` — start over\n- \`matrix\` — you'll see`;
         }
 
-        // 2. "Tell me about yourself"
         if (
             normalizedInput.includes("tell me about yourself") ||
             normalizedInput === "who are you?" ||
@@ -498,7 +253,6 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, acti
             return "{{BIO}}";
         }
 
-        // 3. "Show me your projects"
         if (
             normalizedInput.includes("show me your projects") ||
             normalizedInput.includes("list your projects") ||
@@ -507,33 +261,26 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, acti
             return "Here are some of the key projects I've worked on recently:\n\n{{PROJECTS}}";
         }
 
-        // 4. "What are your skills?"
         if (
             normalizedInput.includes("what are your skills") ||
             normalizedInput.includes("technical skills") ||
             (normalizedInput.includes("skills") && normalizedInput.length < 20)
         ) {
-            return "I have experience with a wide range of technologies in AI, Data Science, and Web Development. Here's my technical stack:\n\n{{SKILLS}}";
+            return "I work across AI, data science, and web development. Here's my stack:\n\n{{SKILLS}}";
         }
 
-        // 5. Work Experience
         if (
             normalizedInput.includes("experience") ||
             normalizedInput.includes("work") ||
             normalizedInput.includes("employment")
         ) {
-            return "Here is my professional journey:\n\n{{EXPERIENCE}}";
+            return "Here's my professional journey so far:\n\n{{EXPERIENCE}}";
         }
 
-        // 6. Certifications
-        if (
-            normalizedInput.includes("certification") ||
-            normalizedInput.includes("certificate")
-        ) {
-            return `I have the following certifications:\n\n{{CERTIFICATIONS}}`;
+        if (normalizedInput.includes("certification") || normalizedInput.includes("certificate")) {
+            return `These are my certifications:\n\n{{CERTIFICATIONS}}`;
         }
 
-        // 7. Hobbies & Interests
         if (
             normalizedInput.includes("hobbies") ||
             normalizedInput.includes("hobby") ||
@@ -542,7 +289,6 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, acti
             return `Here's a bit about what I do outside of work:\n\n{{HOBBIES}}`;
         }
 
-        // 8. Contact / Socials
         if (
             normalizedInput.includes("contact") ||
             normalizedInput.includes("social") ||
@@ -551,16 +297,14 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, acti
             normalizedInput.includes("hire") ||
             normalizedInput.includes("message")
         ) {
-            // Check if it's specifically a request for the form
             if (normalizedInput.includes("form") || normalizedInput.includes("message") || normalizedInput.includes("send") || normalizedInput.includes("contact") || normalizedInput.includes("hire") || normalizedInput.includes("hiring")) {
                 return "{{CONTACT_FORM}}";
             }
-            const socials = portfolioData.socials.map(s => `[${s.name}](${s.url})`).join(' • ');
+            const socials = portfolioData.socials.map(s => `[${s.name}](${s.url})`).join(' · ');
             return `You can reach me via:\n\n${socials}`;
         }
 
-        // --- NEW: Directly handle GitHub inquiries to bypass Groq API completely ---
-        // By returning this tag in production, the frontend fetches the 6-hour Vercel Edge Cached LLM Summary.
+        // GitHub questions use the 6-hour edge-cached summary in production
         if (
             normalizedInput.includes("github") ||
             normalizedInput.includes("working on") ||
@@ -569,26 +313,19 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, acti
             normalizedInput.includes("commit") ||
             normalizedInput.includes("recent")
         ) {
-            if (import.meta.env.DEV) {
-                return null; // Local dev: let the normal Groq flow handle it
-            }
+            if (import.meta.env.DEV) return null; // Local dev: let the normal Groq flow handle it
             return "{{FETCH_CACHED_LLM_GITHUB}}";
         }
 
-        // 9. "Do you have a resume?"
         if (
             normalizedInput.includes("resume") ||
             normalizedInput.includes("cv") ||
             normalizedInput.includes("download resume")
         ) {
-            return "Yes! You can view and download my full resume using the button below.\n\n{{RESUME}}";
+            return "Here's my full résumé:\n\n{{RESUME}}";
         }
 
-        // 10. "Surprise me!"
-        if (
-            normalizedInput.includes("surprise me") ||
-            normalizedInput.includes("fun fact")
-        ) {
+        if (normalizedInput.includes("surprise me") || normalizedInput.includes("fun fact")) {
             const randomFact = portfolioData.funFacts[Math.floor(Math.random() * portfolioData.funFacts.length)];
             return `Here's a fun fact about me: ${randomFact}`;
         }
@@ -596,38 +333,24 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, acti
         return null;
     };
 
-    const streamLocalResponse = async (responseText: string) => {
+    const streamLocalResponse = async (responseText: string, run: number) => {
+        if (run !== runRef.current) return;
         const msgId = (Date.now() + 1).toString();
 
         setMessages(prev => [...prev, {
             id: msgId,
             role: 'agent',
             content: "",
-            isStreaming: true
+            isStreaming: true,
+            trace: snapshotTrace(true),
         }]);
 
-        setIsTyping(true);
         const ctrl = new AbortController();
         abortControllerRef.current = ctrl;
 
-        // Simulate network delay for realism
-        await new Promise(resolve => setTimeout(resolve, 600));
-
-        // Typewriter driven by the display rather than by a timer. The old loop
-        // committed 4 characters every ~20ms — up to a hundred React renders a
-        // second, each one re-rendering (and re-parsing) the message. Now the
-        // character count is derived from elapsed time and committed on a frame
-        // boundary, at most once per COMMIT_MS.
+        // Typewriter driven by elapsed time, committed at most once per COMMIT_MS
         const CHARS_PER_SECOND = 320;
-        const COMMIT_MS = 60;
-
-        // Browsers suspend rAF in a background tab. If the visitor switches away
-        // mid-response, fall back to a timer so the answer still lands instead of
-        // freezing them out behind a disabled composer.
-        const schedule = (fn: () => void) => {
-            if (isHidden()) window.setTimeout(fn, 100);
-            else requestAnimationFrame(fn);
-        };
+        const COMMIT_MS = 32;
 
         await new Promise<void>((resolve) => {
             const startedAt = performance.now();
@@ -659,130 +382,127 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, acti
             schedule(step);
         });
 
+        if (run !== runRef.current) return;
         setMessages(prev => prev.map(msg =>
             msg.id === msgId ? { ...msg, isStreaming: false } : msg
         ));
-
-        setIsTyping(false);
+        finish();
         if (abortControllerRef.current === ctrl) abortControllerRef.current = null;
     };
 
     /**
-     * Executes a Groq API request. It handles standard streams and captures tool calls.
-     * Uses `currentMessages` to include full conversation history (e.g. tool results).
+     * Model tokens arrive in bursts. Rather than painting each burst as it
+     * lands, the writer drains a backlog a little every frame — a sixth of
+     * what's outstanding, so it keeps pace with the network but never lurches.
      */
-    const generateResponseStream = async (input: string, currentMessages: Message[] = messages) => {
-        // 1. Check for local predefined response (only on initial user input, not tool chains)
-        // If the last message was a tool, this is the LLM finalizing the answer, so skip static checks.
+    const createWriter = (msgId: string, run: number) => {
+        let target = '';
+        let shown = 0;
+        let lastCommit = 0;
+        let scheduled = false;
+        let onDrained: (() => void) | null = null;
+
+        const commit = (text: string) =>
+            setMessages(prev => prev.map(msg => msg.id === msgId ? { ...msg, content: text } : msg));
+
+        const frame = () => {
+            scheduled = false;
+            if (run !== runRef.current) { onDrained?.(); return; }
+            const backlog = target.length - shown;
+            if (backlog > 0) {
+                shown += Math.max(1, Math.ceil(backlog / 6));
+                const now = performance.now();
+                if (shown >= target.length || now - lastCommit >= 32) {
+                    commit(target.slice(0, shown));
+                    lastCommit = now;
+                }
+            }
+            if (shown < target.length) { scheduled = true; schedule(frame); }
+            else onDrained?.();
+        };
+
+        return {
+            push(text: string) {
+                target = text;
+                if (!scheduled) { scheduled = true; schedule(frame); }
+            },
+            /** Resolves once everything pushed so far is on screen */
+            drained() {
+                if (shown >= target.length) return Promise.resolve();
+                return new Promise<void>(resolve => { onDrained = resolve; });
+            },
+        };
+    };
+
+    /**
+     * Answers from canned content where possible, otherwise streams from Groq.
+     * Handles tool calls by executing them and recursing with the result.
+     */
+    const generateResponseStream = async (input: string, currentMessages: Message[], run: number) => {
+        const alive = () => run === runRef.current;
+        // If the last message was a tool result, this is the LLM finalising — skip canned answers
         const isToolFollowUp = currentMessages.length > 0 && currentMessages[currentMessages.length - 1].role === 'tool';
 
         if (!isToolFollowUp) {
             const localResponse = getPredefinedResponse(input);
             if (localResponse) {
-                // Determine a fake tool name for agentic aesthetic
-                let toolStr = "";
-                if (localResponse.includes("{{PROJECTS}}")) toolStr = "query_projects_db";
-                else if (localResponse.includes("{{SKILLS}}")) toolStr = "get_technical_skills";
-                else if (localResponse.includes("{{EXPERIENCE}}")) toolStr = "fetch_work_history";
-                else if (localResponse.includes("{{CERTIFICATIONS}}")) toolStr = "verify_certifications";
-                else if (localResponse.includes("{{BIO}}")) toolStr = "load_user_profile";
-                else if (localResponse.includes("{{HOBBIES}}")) toolStr = "get_interests";
-                else if (localResponse.includes("{{CONTACT_FORM}}")) toolStr = "initiate_contact_protocol";
-                else if (localResponse.includes("{{RESUME}}")) toolStr = "generate_resume_link";
-                else if (localResponse.includes("{{GITHUB}}")) toolStr = "fetch_github_activity";
-                else toolStr = "search_knowledge_base";
-
-                if (localResponse === "{{CONTACT_FORM}}") {
-                    setIsTyping(true);
-                    setIsFetchingTool(true);
-                    setFakeToolName(toolStr);
-                    await new Promise(resolve => setTimeout(resolve, 800));
-                    setIsFetchingTool(false);
-                    setFakeToolName("");
-
-                    const msgId = (Date.now() + 1).toString();
-                    setMessages(prev => [...prev, {
-                        id: msgId,
-                        role: 'agent',
-                        content: <ContactForm />
-                    }]);
-                    setIsTyping(false);
-                    return;
-                }
-
                 if (localResponse === "{{FETCH_CACHED_LLM_GITHUB}}") {
-                    // Trigger the UI to look like it's thinking and calling the tool
-                    setIsTyping(true);
-                    setIsFetchingTool(true);
-                    setFakeToolName("fetch_github_activity");
-
+                    addStep('Fetching GitHub activity…');
                     try {
                         const res = await fetch('/api/github-summary');
-                        if (!res.ok) throw new Error("Vercel Edge failed");
-
-                        const cacheStatus = res.headers.get('x-vercel-cache');
-                        if (cacheStatus === 'HIT') {
-                            console.log(`✅ SUCCESS: Response successfully cached! (Vercel Edge: ${cacheStatus})`);
-                            console.log("Using cached GitHub LLM Summary for the next 6 hours (0 tokens used).");
-                        } else if (cacheStatus === 'MISS') {
-                            console.log(`⚠️ CACHE MISS: Vercel hit the real GitHub & Groq API. (Vercel Edge: ${cacheStatus})`);
-                            console.log("LLM Summary fetched and is now cached for 6 hours.");
-                        } else {
-                            console.log(`ℹ️ Vercel Edge Cache Status: ${cacheStatus}`);
-                        }
-
+                        if (!res.ok) throw new Error("Edge function failed");
                         const data = await res.json();
-                        setIsFetchingTool(false);
-                        setFakeToolName("");
-                        await streamLocalResponse(data.summary);
+                        if (!alive()) return;
+                        addStep('Reading recent commits…');
+                        await sleep(450);
+                        await streamLocalResponse(data.summary, run);
                     } catch (err) {
-                        console.error("Agent Edge Cache fallback:", err);
-                        setIsFetchingTool(false);
-                        setFakeToolName("");
-                        await streamLocalResponse("Failed to fetch recent activity.\n\n{{GITHUB}}");
+                        console.error("GitHub summary fallback:", err);
+                        await streamLocalResponse("I couldn't reach GitHub just now — here's my profile instead.\n\n{{GITHUB}}", run);
                     }
                     return;
                 }
 
-                // Simulate tool execution delay for realism for generic predefined responses
-                setIsTyping(true);
-                setIsFetchingTool(true);
-                setFakeToolName(toolStr);
-                await new Promise(resolve => setTimeout(resolve, 1000));
-                setIsFetchingTool(false);
-                setFakeToolName("");
+                const plan = planFor(localResponse);
+                for (const label of plan) {
+                    addStep(label);
+                    await sleep(plan.length > 1 ? 450 : 700);
+                    if (!alive()) return;
+                }
 
-                await streamLocalResponse(localResponse);
+                if (localResponse === "{{CONTACT_FORM}}") {
+                    setMessages(prev => [...prev, {
+                        id: (Date.now() + 1).toString(),
+                        role: 'agent',
+                        content: <ContactForm />,
+                        trace: snapshotTrace(false),
+                    }]);
+                    finish();
+                    return;
+                }
+
+                await streamLocalResponse(localResponse, run);
                 return;
             }
         }
 
-        // 2. High-Level Caching for GitHub Tool removed since it's now handled by getPredefinedResponse and Widget UI
-
-        // 3. Fallback to LLM API
         const apiKey = import.meta.env.VITE_GROQ_API_KEY;
-
         if (!apiKey) {
-            const errorMsg: Message = {
+            setMessages(prev => [...prev, {
                 id: Date.now().toString(),
                 role: 'agent',
-                content: "I'm missing my brain! Please set the VITE_GROQ_API_KEY in the .env file."
-            };
-            setMessages(prev => [...prev, errorMsg]);
-            setIsTyping(false);
+                content: "I'm missing my brain — `VITE_GROQ_API_KEY` isn't set in `.env`.",
+            }]);
+            finish();
             return;
         }
 
         abortControllerRef.current = new AbortController();
-
-        // Artificial delay for "processing" feel
-        await new Promise(resolve => setTimeout(resolve, 1200));
-
         let isToolCall = false;
 
         try {
             const systemPrompt = `You are an interactive AI portfolio assistant for Mirang Bhandari.
-            
+
             CORE INSTRUCTIONS:
             1. Answer questions based on this core data: Mirang Bhandari is a Software Engineer & AI Researcher based in Mannheim, Germany, currently an MSc Applied Data Science & AI student at SRH Heidelberg. He specializes in AI, Backend, and Agentic workflows. He is currently an AI/ML Engineer (Research Partner) at Deutsche Bank, benchmarking agentic AI and LLM-based NLP workflows with Knowledge Graphs and comparing RAG against GraphRAG for financial NLP. Previously he worked at Keysight Technologies (DevOps) and Resolute.AI (Deep Learning). His projects include 'ATS' (a hiring platform), 'Mindwell' (offline mental wellness AI), 'StockScreener', 'TenderFlow' (an AI tender-response agent built at Q-Hack Mannheim), and 'mcpay' (a per-call payment layer for MCP tools built at the Algorand x402 hackathon in Berlin). He is AWS and LangChain certified.
             2. Be professional but personable. Answer in the first person ("I started coding when...").
@@ -796,7 +516,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, acti
             - If the user prompts "Surprise me" or asks for fun facts: Share a fun fact from the data.
 
             4. Keep responses concise. Use markdown for formatting.
-            
+
             FORMATTING:
             - Use **bold** for key concepts, technologies, and project names.
             - Use \`code\` blocks for commands, shortcuts, or file names.
@@ -812,12 +532,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, acti
             - If the JSON says "No recent public coding activity found", simply apologize and state exactly that. Do not pivot to other subjects.
             - Use bullet points ONLY if you are highlighting 2-3 distinct repositories, otherwise write fluid paragraphs.
             - CRITICAL AND MANDATORY: Whenever you receive a tool response from \`fetch_github_activity\`, you MUST end your VERY NEXT final response with EXACTLY the string "{{GITHUB}}". Do not forget this tag.
-            - Under no circumstances should you output JSON arrays to the user. Read the tool data and summarize it naturally.`;
+            - Under no circumstances should you output JSON arrays to the user. Read the tool data and summarize it naturally.
+            ${TONE_PROMPTS[toneRef.current]}`;
 
-            // ==========================================
-            // AGENTIC BEHAVIOR: Build Messages for API
-            // ==========================================
-            // Safely limit history. We keep the most recent messages, but ensure we don't sever a tool_call / tool response pair.
+            // Keep the most recent messages without severing a tool_call / tool response pair
             const slicedMessages = currentMessages.length > 8 ? currentMessages.slice(-8) : currentMessages;
 
             const apiMessages = [
@@ -845,7 +563,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, acti
                 body: JSON.stringify({
                     model: "llama-3.1-8b-instant",
                     messages: apiMessages,
-                    tools: [githubActivityToolDefinition], // <--- PASS TOOLS HERE
+                    tools: [githubActivityToolDefinition],
                     tool_choice: "auto",
                     stream: true,
                     temperature: 0.7,
@@ -863,25 +581,15 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, acti
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
 
-            const msgId = (Date.now() + 1).toString();
+            // The agent message is created on the first text token, so the
+            // thinking indicator stays up until there's something to read
+            let msgId: string | null = null;
+            let writer: ReturnType<typeof createWriter> | null = null;
             let fullContent = "";
-
-            setMessages(prev => [...prev, {
-                id: msgId,
-                role: 'agent',
-                content: "",
-                isStreaming: true
-            }]);
-
-            let lastUpdateTime = 0;
-            // Matches the local typewriter's commit budget — one React render per
-            // ~60ms is well under a frame's worth of markdown work.
-            const THROTTLE_MS = 60;
 
             let toolCallName = "";
             let toolCallArgs = "";
             let toolCallId = "";
-
             let buffer = "";
 
             while (true) {
@@ -889,73 +597,65 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, acti
                 if (done) break;
 
                 buffer += decoder.decode(value, { stream: true });
-
-                // Process only complete lines split by double newline (SSE standard)
                 const lines = buffer.split('\n');
-                buffer = lines.pop() || ""; // Keep the last incomplete fragment in the buffer
+                buffer = lines.pop() || ""; // Keep the last incomplete fragment
 
                 for (const line of lines) {
-                    if (line.trim().startsWith('data: ') && line.trim() !== 'data: [DONE]') {
-                        try {
-                            const dataStr = line.replace(/^data:\s*/, '').trim();
-                            if (!dataStr) continue;
+                    if (!line.trim().startsWith('data: ') || line.trim() === 'data: [DONE]') continue;
+                    try {
+                        const dataStr = line.replace(/^data:\s*/, '').trim();
+                        if (!dataStr) continue;
+                        const data = JSON.parse(dataStr);
 
-                            const data = JSON.parse(dataStr);
-
-                            // Check if LLM decided to use a tool
-                            const deltaTools = data.choices?.[0]?.delta?.tool_calls;
-                            if (deltaTools && deltaTools.length > 0) {
-                                isToolCall = true;
-                                if (deltaTools[0].function?.name) toolCallName = deltaTools[0].function.name;
-                                if (deltaTools[0].function?.arguments) toolCallArgs += deltaTools[0].function.arguments;
-                                if (deltaTools[0].id) toolCallId = deltaTools[0].id;
-                                continue;
-                            }
-
-                            // Standard text content
-                            const content = data.choices?.[0]?.delta?.content || "";
-                            if (content) {
-                                fullContent += content;
-
-                                const now = Date.now();
-                                if (now - lastUpdateTime > THROTTLE_MS) {
-                                    setMessages(prev => prev.map(msg =>
-                                        msg.id === msgId
-                                            ? { ...msg, content: fullContent }
-                                            : msg
-                                    ));
-                                    lastUpdateTime = now;
-                                }
-                            }
-                        } catch (e) {
-                            console.error("Error parsing stream chunk, skipped:", e, "Raw string:", line);
+                        const deltaTools = data.choices?.[0]?.delta?.tool_calls;
+                        if (deltaTools && deltaTools.length > 0) {
+                            isToolCall = true;
+                            if (deltaTools[0].function?.name) toolCallName = deltaTools[0].function.name;
+                            if (deltaTools[0].function?.arguments) toolCallArgs += deltaTools[0].function.arguments;
+                            if (deltaTools[0].id) toolCallId = deltaTools[0].id;
+                            continue;
                         }
+
+                        const content = data.choices?.[0]?.delta?.content || "";
+                        if (!content) continue;
+                        fullContent += content;
+
+                        if (!msgId) {
+                            const id = (Date.now() + 1).toString();
+                            msgId = id;
+                            writer = createWriter(id, run);
+                            const trace = snapshotTrace(true);
+                            setMessages(prev => [...prev, { id, role: 'agent', content: '', isStreaming: true, trace }]);
+                        }
+                        writer!.push(fullContent);
+                    } catch (e) {
+                        console.error("Error parsing stream chunk, skipped:", e, "Raw string:", line);
                     }
                 }
             }
 
-            // ==========================================
-            // AGENTIC BEHAVIOR: Execute Tool Chain
-            // ==========================================
-            if (isToolCall) {
-                // Remove the empty streaming message placeholder
-                setMessages(prev => prev.filter(msg => msg.id !== msgId));
-                setIsFetchingTool(true); // Trigger UI indicator
+            if (!alive()) return;
 
-                // 1. Add Assistant Tool Call request to history
+            if (isToolCall) {
+                if (msgId) {
+                    const id = msgId;
+                    setMessages(prev => prev.filter(msg => msg.id !== id));
+                }
+
                 const toolRequestMessage: any = { role: "assistant", tool_calls: [{ id: toolCallId, function: { name: toolCallName, arguments: toolCallArgs }, type: "function" }] };
                 const updatedMessagesAfterRequest = [...currentMessages, toolRequestMessage];
 
-                // 2. Execute the physical tool function
                 let toolResult = "";
                 if (toolCallName === 'fetch_github_activity') {
+                    addStep('Checking GitHub activity…');
                     const args = JSON.parse(toolCallArgs || "{}");
                     toolResult = await fetchGithubActivity(args.username);
+                    if (!alive()) return;
+                    addStep('Reading recent commits…');
                 } else {
                     toolResult = JSON.stringify({ error: `Tool ${toolCallName} not found or unsupported.` });
                 }
 
-                // 3. Add Tool Response to history
                 const toolResponseMessage: Message = {
                     id: toolCallId,
                     role: "tool",
@@ -963,195 +663,126 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ hasStarted, onStart, acti
                     content: toolResult
                 };
 
-                // Recursively call generateResponseStream to send the tool result back to Groq
-                const messagesWithToolOutput = [...updatedMessagesAfterRequest, toolResponseMessage];
-                await generateResponseStream(input, messagesWithToolOutput);
-
-                return; // Exit this execution since the recursive call handles the rest
+                // Send the tool result back to the model for the final answer
+                await generateResponseStream(input, [...updatedMessagesAfterRequest, toolResponseMessage], run);
+                return;
             }
 
-            // Handle the case where the LLM successfully retrieved the GitHub data via the tool
-            // but completely failed to listen to the prompt to append the {{GITHUB}} tag.
-            // We can detect this if the tool was called in this request chain, but the final text lacks the tag.
-            const containedToolCall = isToolCall || currentMessages.some(m => m.role === 'tool' && m.name === 'fetch_github_activity');
-            let finalOutput = fullContent;
+            // The model sometimes forgets the {{GITHUB}} tag after using the tool
+            const usedGithubTool = currentMessages.some(m => m.role === 'tool' && m.name === 'fetch_github_activity');
+            const finalOutput = usedGithubTool && !fullContent.includes('{{GITHUB}}')
+                ? fullContent + "\n\n{{GITHUB}}"
+                : fullContent;
 
-            if (containedToolCall && !fullContent.includes('{{GITHUB}}') && !isToolCall) {
-                console.log("LLM forgot the GITHUB tag after tool call. Manually injecting fail-safe tag.");
-                finalOutput = fullContent + "\n\n{{GITHUB}}";
+            if (msgId) {
+                const id = msgId;
+                await writer?.drained();
+                if (!alive()) return;
+                setMessages(prev => prev.map(msg => msg.id === id ? { ...msg, content: finalOutput, isStreaming: false } : msg));
+            } else if (finalOutput) {
+                setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'agent', content: finalOutput, trace: snapshotTrace(true) }]);
             }
-
-            // Ensure final content is set for normal text
-            setMessages(prev => prev.map(msg =>
-                msg.id === msgId
-                    ? { ...msg, content: finalOutput, isStreaming: false }
-                    : msg
-            ));
-
         } catch (error: any) {
-            if (error.name === 'AbortError') return;
+            if (error.name === 'AbortError' || !alive()) return;
             console.error("Groq API Error:", error);
-            const errorMsg: Message = {
+            setMessages(prev => [...prev, {
                 id: Date.now().toString(),
                 role: 'agent',
-                content: `Error: ${error.message}. Please check your connection or API key.`
-            };
-            setMessages(prev => [...prev, errorMsg]);
+                content: "Something went wrong reaching the model. Give it another try in a moment.",
+            }]);
         } finally {
-            setIsTyping(false);
-            if (!isToolCall) {
-                setIsFetchingTool(false);
-                setFakeToolName("");
+            if (!isToolCall && alive()) {
+                finish();
+                abortControllerRef.current = null;
             }
-            abortControllerRef.current = null;
         }
     };
 
+    const visibleMessages = messages.filter(m => m.role !== 'tool' && !m.tool_calls && !(m.isStreaming && m.content === ''));
+    const showThinking = busy && !messages.some(m => m.isStreaming && m.content !== '');
+    const lastAgentId = [...visibleMessages].reverse().find(m => m.role === 'agent')?.id;
+
     return (
-        <div ref={containerRef} className="flex flex-col h-full relative overflow-hidden">
-            <>
-            <div
-                ref={heroRef}
-                className="flex-1 w-full flex flex-col items-center justify-center px-4 overflow-hidden relative z-10"
-            >
-                <div className="flex flex-col items-center text-center w-full max-w-[760px] mx-auto lg:-mt-[40px]">
-
-                    {/* Headline */}
-                    <h2
-                        ref={nameRef}
-                        className="font-fustat font-medium text-[#f2f1ec] text-[42px] sm:text-6xl lg:text-[80px] leading-none tracking-[-0.02em] mt-[34px]"
-                    >
-                        {portfolioData.name}
-                    </h2>
-
-                    {/* Subtitle */}
-                    <p data-hero-item className="font-fustat font-medium text-[#8a8a85] text-base sm:text-xl tracking-[-0.02em] mt-[30px] max-w-[620px] px-2">
-                        {portfolioData.role}. Ask my agent anything — it answers like me.
-                    </p>
-
-                    {/* Command palette — the front door */}
-                    <div data-hero-item className="w-full flex justify-center mt-[40px]">
-                        <CommandPalette onSubmit={handleSendMessage} />
-                    </div>
-
-                </div>
-            </div>
-
-            {/* Messages Area - Initially Hidden via GSAP */}
-            <div
-                ref={chatRef}
-                className="flex-1 flex flex-col overflow-hidden opacity-0 hidden"
-            >
-                <div
-                    ref={messagesContainerRef}
-                    onScroll={handleScroll}
-                    onWheel={(e) => { if (e.deltaY < 0) disengageFollow(); }}
-                    onTouchStart={(e) => { touchStartYRef.current = e.touches[0].clientY; }}
-                    onTouchMove={(e) => { if (e.touches[0].clientY > touchStartYRef.current + 8) disengageFollow(); }}
-                    className="flex-1 overflow-y-auto px-2 py-4"
-                >
-                    <div ref={messagesContentRef}>
-                    {messages.filter(m => m.role !== 'tool' && !m.tool_calls && !(m.isStreaming && m.content === '')).map((msg) => (
-                        <ChatMessage
-                            key={msg.id}
-                            role={msg.role}
-                            content={msg.content}
-                            onProjectSelect={setSelectedProject}
-                        />
-                    ))}
-
-                    {/* Loading / Tool Execution indicator */}
-                    {busy && !messages.some(m => m.isStreaming && m.content !== '') && (
-                        <div className="flex w-full mb-5 justify-start">
-                            <div className="flex max-w-[85%] flex-row gap-2.5">
-                                <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 bg-[#141414] border border-[#232323] text-[#8a8a85]">
-                                    <Terminal size={15} />
-                                </div>
-                                <div className="flex flex-col gap-1.5 max-w-full overflow-hidden">
-                                    <div className="px-4 py-2.5 rounded-2xl rounded-tl-sm bg-[#121212] border border-[#232323] text-[#8a8a85] text-sm flex items-center gap-3 w-fit max-w-full">
-                                        <ThinkingVisualizer />
-                                        <span className="text-[11px] text-[#555550] font-mono self-center whitespace-nowrap">pid:404</span>
-                                    </div>
-                                    {isFetchingTool && (
-                                        <div className="flex flex-wrap items-center gap-1.5 px-1 text-[#8a8a85] text-[11px] mt-0.5 max-w-full">
-                                            <Activity size={11} className="text-[#22d3ee] shrink-0 animate-pulse" />
-                                            <span className="break-all sm:break-normal font-mono">
-                                                calling{' '}
-                                                <span className="inline-block text-[#67e8f9] bg-[#22d3ee]/10 border border-[#22d3ee]/25 px-1.5 py-0.5 rounded-md">
-                                                    <ScrambleLabel text={fakeToolName || "fetch_github_activity"} />
-                                                </span>
-                                            </span>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
+        <div className="flex-1 min-h-0 flex flex-col relative">
+            {isEmpty ? (
+                /* ---- Empty state: greeting + centred composer ---- */
+                <div className="flex-1 flex flex-col items-center justify-center pb-[12vh]">
+                    {/* Same width + padding as the chat dock, so the composer only slides */}
+                    <div className="w-full max-w-[46rem] px-3 sm:px-6 flex flex-col items-center">
+                        <h1 className="fade-in text-[26px] sm:text-[30px] font-medium tracking-[-0.02em] text-fg text-center mb-7">
+                            What would you like to know about Mirang?
+                        </h1>
+                        <Composer onSend={handleSendMessage} onStop={handleStop} busy={busy} autoFocus={canHover} />
+                        <div className="mt-4 flex flex-wrap justify-center gap-2">
+                            {SUGGESTIONS.map(({ label, prompt, Icon }, i) => (
+                                <button
+                                    key={label}
+                                    onClick={() => handleSendMessage(prompt)}
+                                    style={{ animationDelay: `${120 + i * 40}ms` }}
+                                    className="msg-in flex items-center gap-2 rounded-full border border-line px-3.5 py-2 text-sm text-muted hover:bg-hover hover:text-fg transition-colors"
+                                >
+                                    <Icon size={15} className="text-subtle" />
+                                    {label}
+                                </button>
+                            ))}
                         </div>
-                    )}
-                    <div ref={bottomRef} />
                     </div>
                 </div>
-            </div>
+            ) : (
+                <>
+                    <div
+                        ref={scrollerRef}
+                        onScroll={handleScroll}
+                        onWheel={(e) => { if (e.deltaY < 0) disengageFollow(); }}
+                        onTouchStart={(e) => { touchStartYRef.current = e.touches[0].clientY; }}
+                        onTouchMove={(e) => { if (e.touches[0].clientY > touchStartYRef.current + 8) disengageFollow(); }}
+                        className="flex-1 overflow-y-auto"
+                    >
+                        <div ref={contentRef} className="mx-auto w-full max-w-[46rem] px-4 sm:px-6 pt-4 pb-10 flex flex-col gap-7">
+                            {visibleMessages.map((msg) => (
+                                <ChatMessage
+                                    key={msg.id}
+                                    role={msg.role}
+                                    content={msg.content}
+                                    isStreaming={msg.isStreaming}
+                                    isLatest={msg.id === lastAgentId}
+                                    trace={msg.trace}
+                                    onProjectSelect={setSelectedProject}
+                                />
+                            ))}
+                            {showThinking && <ThinkingIndicator label={liveLabel ?? 'Thinking…'} />}
+                        </div>
+                    </div>
 
-            {/* Project Detail Modal */}
+                    <div className="relative mx-auto w-full max-w-[46rem] px-3 sm:px-6 pb-2 bg-bg">
+                        {/* Scroll-to-latest — appears once you've scrolled away from the bottom */}
+                        <button
+                            onClick={jumpToBottom}
+                            aria-label="Scroll to latest"
+                            tabIndex={showJump ? 0 : -1}
+                            className={`absolute -top-12 left-1/2 -translate-x-1/2 size-9 grid place-items-center rounded-full border border-line bg-elevated text-muted hover:text-fg shadow-[0_2px_10px_rgba(0,0,0,0.1)] transition-[opacity,transform] duration-200 ${showJump ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'}`}
+                        >
+                            <ArrowDown size={16} />
+                        </button>
+                        <Composer onSend={handleSendMessage} onStop={handleStop} busy={busy} autoFocus={canHover} />
+                        <p className="py-2 text-center text-xs text-subtle">
+                            AgentFolio can make mistakes. The résumé is the source of truth.
+                        </p>
+                    </div>
+                </>
+            )}
+
             {selectedProject && (
                 <Suspense fallback={null}>
-                    <ProjectDetailModal
-                        project={selectedProject}
-                        onClose={() => setSelectedProject(null)}
-                    />
+                    <ProjectDetailModal project={selectedProject} onClose={() => setSelectedProject(null)} />
                 </Suspense>
             )}
 
-            {/* Matrix Effect Overlay */}
             {showMatrix && (
                 <Suspense fallback={null}>
                     <MatrixEffect onExit={() => setShowMatrix(false)} />
                 </Suspense>
             )}
-
-            {/* Sidebar */}
-            <Sidebar
-                isOpen={isSidebarOpen}
-                onClose={handleCloseSidebar}
-                onClear={handleClearMessages}
-                onCommandSelect={handleSendMessage}
-                isDisabled={busy}
-            />
-
-            {/* Toggle Sidebar Button - Desktop, chat world only */}
-            {hasStarted && (
-                <button
-                    onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                    className={`hidden sm:block fixed top-1/2 -translate-y-1/2 z-[60] p-2.5 text-[#8a8a85] hover:text-[#f2f1ec] bg-[#141414] border border-[#232323] transition-all duration-300 ease-out shadow-lg hover:border-[#2e2e2e] ${isSidebarOpen
-                        ? 'left-72 sm:left-80 rounded-r-xl border-l-[#141414]'
-                        : 'left-0 rounded-r-xl border-l-0'
-                        }`}
-                    aria-label="Toggle Menu"
-                >
-                    {isSidebarOpen ? <ChevronLeft size={20} /> : <Menu size={20} />}
-                </button>
-            )}
-
-            {/* Input Area — chat world only; hero uses the search box */}
-            <div ref={inputDockRef} className="relative pb-3 z-20 hidden opacity-0">
-                {/* Gradient bleed — dissolves messages into the input card */}
-                <div className="absolute -top-10 left-0 right-0 h-10 bg-gradient-to-b from-transparent to-[#0a0a0a] pointer-events-none" />
-
-                {/* Floating card */}
-                <div className="bg-[#121212] border border-[#232323] rounded-2xl p-2 pt-1.5">
-                    <ActionButtons
-                        prompts={suggestPrompts}
-                        onSelect={handleSendMessage}
-                        isDisabled={busy}
-                    />
-
-                    <ChatInput onSend={handleSendMessage} disabled={busy} />
-                </div>
-
-                {/* Telemetry strip */}
-                <StatusBar />
-            </div>
-            </>
         </div>
     );
 };
