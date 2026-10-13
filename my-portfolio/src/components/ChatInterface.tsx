@@ -9,6 +9,7 @@ import { ThinkingIndicator, type Trace } from './Thinking';
 import { TONE_PROMPTS, type Tone } from '../lib/tone';
 import { portfolioData } from '../data/portfolioData';
 import { githubActivityToolDefinition, fetchGithubActivity } from './githubAgent';
+import { fetchQuota, exhaustedMessage, type Quota } from '../lib/quota';
 
 const MatrixEffect = lazy(() => import('./MatrixEffect'));
 const ProjectDetailModal = lazy(() => import('./ProjectDetailModal'));
@@ -70,6 +71,16 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ tone, activePrompt, onPro
     const [liveLabel, setLiveLabel] = useState<string | null>(null);
     const [showMatrix, setShowMatrix] = useState(false);
     const [selectedProject, setSelectedProject] = useState<any>(null);
+    // Token allowance for model answers — canned answers don't touch it
+    const [quota, setQuota] = useState<Quota | null>(null);
+    const quotaRef = useRef<Quota | null>(null);
+    quotaRef.current = quota;
+
+    useEffect(() => {
+        let live = true;
+        fetchQuota().then(q => { if (live && q) setQuota(q); });
+        return () => { live = false; };
+    }, []);
 
     const busy = isTyping;
     const isEmpty = messages.length === 0;
@@ -488,14 +499,13 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ tone, activePrompt, onPro
             }
         }
 
-        const apiKey = import.meta.env.VITE_GROQ_API_KEY;
-        if (!apiKey) {
-            setMessages(prev => [...prev, {
-                id: Date.now().toString(),
-                role: 'agent',
-                content: "I'm missing my brain — `VITE_GROQ_API_KEY` isn't set in `.env`.",
-            }]);
+        const sayAndFinish = (content: string) => {
+            setMessages(prev => [...prev, { id: Date.now().toString(), role: 'agent', content, trace: snapshotTrace(false) }]);
             finish();
+        };
+
+        if (quotaRef.current?.exhausted) {
+            sayAndFinish(exhaustedMessage(quotaRef.current));
             return;
         }
 
@@ -556,26 +566,24 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ tone, activePrompt, onPro
                 })
             ];
 
-            const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+            // Model, limits and the Groq key live server-side in api/chat.js,
+            // which also meters tokens per visitor
+            const response = await fetch("/api/chat", {
                 method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${apiKey}`
-                },
-                body: JSON.stringify({
-                    // llama-3.1-8b-instant was retired by Groq (404 model_not_found)
-                    model: "openai/gpt-oss-20b",
-                    reasoning_effort: "low",
-                    messages: apiMessages,
-                    tools: [githubActivityToolDefinition],
-                    tool_choice: "auto",
-                    stream: true,
-                    temperature: 0.7,
-                    max_tokens: 1500
-                }),
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ messages: apiMessages, tools: [githubActivityToolDefinition] }),
                 signal: abortControllerRef.current.signal
             });
 
+            if (response.status === 429) {
+                const data = await response.json().catch(() => ({}));
+                if (!alive()) return;
+                if (data.quota) setQuota(data.quota);
+                if (data.error === 'quota_exhausted' && data.quota) sayAndFinish(exhaustedMessage(data.quota));
+                else if (data.error === 'rate_limited') sayAndFinish("That's a lot of questions in a row — give me a minute to catch my breath, then ask again.");
+                else sayAndFinish("The model is busy right now (too many visitors at once). Try again in a minute — the topic shortcuts still work meanwhile.");
+                return;
+            }
             if (!response.ok) {
                 const errorText = await response.text().catch(() => response.statusText);
                 throw new Error(`API Error ${response.status}: ${errorText || response.statusText}`);
@@ -610,6 +618,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ tone, activePrompt, onPro
                         const dataStr = line.replace(/^data:\s*/, '').trim();
                         if (!dataStr) continue;
                         const data = JSON.parse(dataStr);
+
+                        // Final event from our proxy with the updated allowance
+                        if (data.quota) { setQuota(data.quota); continue; }
 
                         const deltaTools = data.choices?.[0]?.delta?.tool_calls;
                         if (deltaTools && deltaTools.length > 0) {
@@ -721,7 +732,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ tone, activePrompt, onPro
                         </h1>
                     </div>
                     <div className="order-3 sm:order-none mx-auto w-full max-w-[46rem] px-3 sm:px-6 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:pb-0">
-                        <Composer onSend={handleSendMessage} onStop={handleStop} busy={busy} autoFocus={canHover} />
+                        <Composer onSend={handleSendMessage} onStop={handleStop} busy={busy} autoFocus={canHover} quota={quota} />
                     </div>
                     <div className="scrollbar-hide mx-auto w-full max-w-[46rem] flex gap-2 overflow-x-auto px-3 pb-3 sm:pb-0 sm:mt-4 sm:px-6 sm:flex-wrap sm:justify-center sm:overflow-visible">
                         {SUGGESTIONS.map(({ label, prompt, Icon }, i) => (
@@ -789,6 +800,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ tone, activePrompt, onPro
                             onStop={handleStop}
                             busy={busy}
                             autoFocus={canHover}
+                            quota={quota}
                         />
                         {/* The starter chips are gone by now — the footnote keeps the way back to the topic list */}
                         <p className="py-2 text-center text-xs text-subtle">

@@ -320,8 +320,9 @@ html.theme-vt::view-transition-new(root) {
   .hint-in, .hint-out { animation-duration: 1ms; }
 }
 
-/* Gemini-style ambient glow behind the home screen only — static, blurred
-   colour washes that sit under the composer */
+/* Gemini-style ambient glow behind the home screen only — blurred colour
+   washes under the composer that drift very slowly, so the page feels alive
+   without anything you'd consciously notice moving */
 .home-glow {
   position: absolute;
   inset: 0;
@@ -342,4 +343,15 @@ html.theme-vt::view-transition-new(root) {
     radial-gradient(closest-side at 70% 45%, var(--glow-2), transparent),
     radial-gradient(closest-side at 50% 75%, var(--glow-3), transparent);
   filter: blur(60px);
+  animation: glow-drift 28s ease-in-out infinite alternate;
+  will-change: transform;
+}
+@keyframes glow-drift {
+  0%   { transform: translate(-50%, -50%) rotate(0deg) scale(1); }
+  33%  { transform: translate(-47%, -52%) rotate(4deg) scale(1.04); }
+  66%  { transform: translate(-53%, -49%) rotate(-3deg) scale(0.97); }
+  100% { transform: translate(-50%, -51%) rotate(2deg) scale(1.03); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-glow::before { animation: none; }
 }

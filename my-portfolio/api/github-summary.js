@@ -4,10 +4,10 @@ export default async function handler(req, res) {
 
     try {
         const githubToken = process.env.VITE_GITHUB_TOKEN;
-        const groqKey = process.env.VITE_GROQ_API_KEY;
+        const groqKey = process.env.GROQ_API_KEY || process.env.VITE_GROQ_API_KEY;
 
         if (!groqKey) {
-            return res.status(500).json({ summary: "Error: Missing VITE_GROQ_API_KEY on Vercel.\n\n{{GITHUB}}" });
+            return res.status(500).json({ summary: "Error: Missing GROQ_API_KEY on Vercel.\n\n{{GITHUB}}" });
         }
 
         const headers = githubToken ? { 'Authorization': `Bearer ${githubToken}` } : {};
