@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
-import { User, FolderGit2, Briefcase, Github, Mail, ArrowDown } from 'lucide-react';
+import { User, FolderGit2, Briefcase, Github, Mail, ArrowDown, ArrowLeft, Menu } from 'lucide-react';
 import { isHidden, motionTier } from '../lib/motion';
 import { withViewTransition } from '../lib/viewTransition';
 import ChatMessage from './ChatMessage';
@@ -27,6 +27,8 @@ interface ChatInterfaceProps {
     tone: Tone;
     activePrompt: string | null;
     onPromptHandled: () => void;
+    /** Reveal the sidebar's full topic list (it may be collapsed or off-canvas) */
+    onBrowseTopics: () => void;
 }
 
 const SUGGESTIONS = [
@@ -62,7 +64,7 @@ const planFor = (response: string): string[] => {
     return ['Searching knowledge base…'];
 };
 
-const ChatInterface: React.FC<ChatInterfaceProps> = ({ tone, activePrompt, onPromptHandled }) => {
+const ChatInterface: React.FC<ChatInterfaceProps> = ({ tone, activePrompt, onPromptHandled, onBrowseTopics }) => {
     const [messages, setMessages] = useState<Message[]>([]);
     const [isTyping, setIsTyping] = useState(false);
     const [liveLabel, setLiveLabel] = useState<string | null>(null);
@@ -733,6 +735,17 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ tone, activePrompt, onPro
                             </button>
                         ))}
                     </div>
+                    {/* Points newcomers at the full topic list in the sidebar */}
+                    <button
+                        onClick={onBrowseTopics}
+                        style={{ animationDelay: `${120 + SUGGESTIONS.length * 40}ms` }}
+                        className="msg-in mx-auto mb-3 sm:mb-0 sm:mt-5 flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs text-subtle hover:text-fg transition-colors"
+                    >
+                        <ArrowLeft size={13} className="hidden desk:block" />
+                        <Menu size={13} className="desk:hidden" />
+                        <span className="hidden desk:inline">More topics in the sidebar — skills, certifications, résumé…</span>
+                        <span className="desk:hidden">Tap here for all topics — skills, résumé, hobbies…</span>
+                    </button>
                 </div>
             ) : (
                 <>
@@ -770,9 +783,19 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ tone, activePrompt, onPro
                         >
                             <ArrowDown size={16} />
                         </button>
-                        <Composer onSend={handleSendMessage} onStop={handleStop} busy={busy} autoFocus={canHover} />
+                        <Composer
+                            onSend={handleSendMessage}
+                            onStop={handleStop}
+                            busy={busy}
+                            autoFocus={canHover}
+                            placeholder='Ask a follow-up, or try "skills", "résumé"…'
+                        />
+                        {/* The starter chips are gone by now — the footnote keeps the way back to the topic list */}
                         <p className="py-2 text-center text-xs text-subtle">
-                            AgentFolio can make mistakes. The résumé is the source of truth.
+                            <button onClick={onBrowseTopics} className="hover:text-fg hover:underline underline-offset-2 transition-colors">
+                                Browse all topics
+                            </button>
+                            {' '}· AgentFolio can make mistakes. The résumé is the source of truth.
                         </p>
                     </div>
                 </>

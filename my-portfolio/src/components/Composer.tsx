@@ -6,6 +6,7 @@ interface ComposerProps {
     onStop: () => void;
     busy: boolean;
     autoFocus?: boolean;
+    placeholder?: string;
 }
 
 const MAX_HEIGHT = 200;
@@ -14,7 +15,7 @@ const MAX_HEIGHT = 200;
  * The composer owns its draft text — keeping it in ChatInterface would
  * re-render the whole transcript on every keystroke.
  */
-const Composer: React.FC<ComposerProps> = ({ onSend, onStop, busy, autoFocus }) => {
+const Composer: React.FC<ComposerProps> = ({ onSend, onStop, busy, autoFocus, placeholder = 'Ask about projects, skills, experience…' }) => {
     const [value, setValue] = useState('');
     const ref = useRef<HTMLTextAreaElement>(null);
 
@@ -51,7 +52,7 @@ const Composer: React.FC<ComposerProps> = ({ onSend, onStop, busy, autoFocus }) 
                         submit();
                     }
                 }}
-                placeholder="Ask anything about Mirang"
+                placeholder={placeholder}
                 aria-label="Message"
                 className="flex-1 resize-none bg-transparent outline-none text-base leading-6 py-1.5 text-fg placeholder:text-subtle"
                 style={{ maxHeight: MAX_HEIGHT }}
