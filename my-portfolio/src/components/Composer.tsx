@@ -1,12 +1,15 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { isHidden } from '../lib/motion';
 import { ArrowUp, Square } from 'lucide-react';
+import UsageRing from './UsageRing';
+import type { Quota } from '../lib/quota';
 
 interface ComposerProps {
     onSend: (text: string) => void;
     onStop: () => void;
     busy: boolean;
     autoFocus?: boolean;
+    quota?: Quota | null;
 }
 
 const MAX_HEIGHT = 200;
@@ -29,7 +32,7 @@ const canHover = typeof window !== 'undefined' && window.matchMedia('(hover: hov
  * The composer owns its draft text — keeping it in ChatInterface would
  * re-render the whole transcript on every keystroke.
  */
-const Composer: React.FC<ComposerProps> = ({ onSend, onStop, busy, autoFocus }) => {
+const Composer: React.FC<ComposerProps> = ({ onSend, onStop, busy, autoFocus, quota }) => {
     const [value, setValue] = useState('');
     const [focused, setFocused] = useState(false);
     // `turn` remounts the two hint layers so their roll animations replay each swap
@@ -66,7 +69,7 @@ const Composer: React.FC<ComposerProps> = ({ onSend, onStop, busy, autoFocus }) 
         <form
             onSubmit={(e) => { e.preventDefault(); submit(); }}
             onClick={() => ref.current?.focus()}
-            className="vt-composer w-full flex items-end gap-2 rounded-[28px] bg-composer border border-line dark:border-transparent shadow-[0_1px_6px_rgba(0,0,0,0.05)] pl-5 pr-2.5 py-2.5 cursor-text"
+            className="vt-composer w-full flex items-end gap-1 rounded-[28px] bg-composer border border-line dark:border-transparent shadow-[0_1px_6px_rgba(0,0,0,0.05)] pl-5 pr-2.5 py-2.5 cursor-text"
         >
             <div className="relative flex-1 min-w-0">
                 {/* Animated stand-in for the placeholder — a native one can't fade */}
@@ -109,6 +112,7 @@ const Composer: React.FC<ComposerProps> = ({ onSend, onStop, busy, autoFocus }) 
                     style={{ maxHeight: MAX_HEIGHT }}
                 />
             </div>
+            {quota && <UsageRing quota={quota} />}
             {/* One button, two icons crossfading — Send ⇄ Stop never jumps */}
             <button
                 type={busy ? 'button' : 'submit'}
