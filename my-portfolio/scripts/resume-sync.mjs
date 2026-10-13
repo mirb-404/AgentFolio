@@ -21,8 +21,12 @@ if (pdf.subarray(0, 5).toString() !== '%PDF-') {
     throw new Error('Drive did not return a PDF — is the file still shared publicly?');
 }
 
-await rm(OUT, { recursive: true, force: true });
+// Update the folder in place rather than deleting it: replacing a watched
+// directory crashes Vite's file watcher on Windows (ENOMEM on scandir).
 await mkdir(OUT, { recursive: true });
+for (const f of await readdir(OUT)) {
+    if (/^page-\d+\.png$/.test(f)) await rm(path.join(OUT, f)); // a shorter résumé must not keep old pages
+}
 await writeFile(path.join(OUT, 'resume.pdf'), pdf);
 
 const GS = process.platform === 'win32' ? 'gswin64c' : 'gs';
