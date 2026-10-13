@@ -12,7 +12,7 @@ export const getPredefinedResponse = (input: string): string | null => {
     const normalizedInput = input.trim().toLowerCase();
 
     if (normalizedInput === 'help') {
-        return `A few things you can type:\n\n- \`clear\` — start over\n- \`matrix\` — you'll see`;
+        return `A few things you can type:\n\n- \`clear\` to start over\n- \`matrix\` and you'll see`;
     }
 
     // Before the keyword rules, so "nice work!" is a compliment, not a request for work history
@@ -130,11 +130,24 @@ const WIDGET_TOPICS: Record<string, RegExp> = {
 };
 
 /**
+ * Models love em dashes and non-breaking hyphens even when asked not to.
+ * Number ranges become plain hyphens ("2020-2024"); dashes between words
+ * become commas.
+ */
+const tidyDashes = (text: string): string => text
+    .replace(/[\u2010\u2011]/g, '-')
+    .replace(/(?<=[\d€$%kKmM])\s*[\u2013\u2014]\s*(?=[\d€$~])/g, '-')
+    .replace(/(?<=[:;,.!?])\s*[\u2013\u2014]+\s*/g, ' ')
+    .replace(/\s*[\u2013\u2014]\s*(?=\n|$)/g, '')
+    .replace(/^\s*[\u2013\u2014]\s*/gm, '')
+    .replace(/\s*[\u2013\u2014]+\s*/g, ', ');
+
+/**
  * The model sometimes tacks a widget onto answers that don't need one (a
  * skills grid under "hi!"). Keep a model-added tag only when the visitor's
  * question was about that topic. {{GITHUB}} is left alone — the GitHub tool
  * flow adds it deliberately.
  */
-export const keepRelevantWidgets = (answer: string, question: string): string =>
-    answer.replace(/\n*\{\{(PROJECTS|SKILLS|RESUME|HOBBIES)\}\}/g, (tag, name) =>
+export const cleanModelAnswer = (answer: string, question: string): string =>
+    tidyDashes(answer).replace(/\n*\{\{(PROJECTS|SKILLS|RESUME|HOBBIES)\}\}/g, (tag, name) =>
         WIDGET_TOPICS[`{{${name}}}`].test(question) ? tag : '');

@@ -7,12 +7,12 @@ import Composer from './Composer';
 import ContactForm from '../widgets/ContactForm';
 import { ThinkingIndicator, type Trace } from './Thinking';
 import type { Tone } from '../../lib/tone';
-import { buildSystemPrompt } from '../../lib/systemPrompt';
-import { getPredefinedResponse, planFor, keepRelevantWidgets } from '../../lib/cannedAnswers';
+import { getPredefinedResponse, planFor, cleanModelAnswer } from '../../lib/cannedAnswers';
+import { MAX_QUESTION_LENGTH } from '../../lib/quota';
 import { canHover } from '../../lib/dom';
 import type { Project } from '../../data/portfolioData';
-import { githubActivityToolDefinition, fetchGithubActivity } from '../../lib/githubTool';
-import { fetchQuota, exhaustedMessage, type Quota } from '../../lib/quota';
+import { fetchGithubActivity } from '../../lib/githubTool';
+import { fetchQuota, exhaustedMessage, setLastModel, type Quota } from '../../lib/quota';
 
 const MatrixEffect = lazy(() => import('./MatrixEffect'));
 const ProjectDetailModal = lazy(() => import('../widgets/ProjectDetailModal'));
@@ -369,7 +369,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ tone, activePrompt, onPro
                         await streamLocalResponse(data.summary, run);
                     } catch (err) {
                         console.error("GitHub summary fallback:", err);
-                        await streamLocalResponse("I couldn't reach GitHub just now — here's my profile instead.\n\n{{GITHUB}}", run);
+                        await streamLocalResponse("I couldn't reach GitHub just now, so here's my profile instead.\n\n{{GITHUB}}", run);
                     }
                     return;
                 }
@@ -411,33 +411,30 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ tone, activePrompt, onPro
         let isToolCall = false;
 
         try {
-            const systemPrompt = buildSystemPrompt(toneRef.current);
-
             // Keep the most recent messages without severing a tool_call / tool response pair
             const slicedMessages = currentMessages.length > 8 ? currentMessages.slice(-8) : currentMessages;
 
-            const apiMessages = [
-                { role: "system", content: systemPrompt },
-                ...slicedMessages.map(m => {
-                    if (m.role === 'tool') {
-                        return { role: "tool", content: m.content as string, tool_call_id: m.id, name: m.name };
-                    }
-                    if (m.tool_calls) {
-                        return { role: "assistant", content: null, tool_calls: m.tool_calls };
-                    }
-                    return {
-                        role: m.role === 'agent' ? 'assistant' : 'user',
-                        content: typeof m.content === 'string' ? m.content : "Displaying rich content."
-                    };
-                })
-            ];
+            // The server owns the instructions and tools; it only gets the conversation,
+            // trimmed to the per-message limits api/chat.js enforces
+            const apiMessages = slicedMessages.map(m => {
+                if (m.role === 'tool') {
+                    return { role: "tool", content: String(m.content).slice(0, 6000), tool_call_id: m.id, name: m.name };
+                }
+                if (m.tool_calls) {
+                    return { role: "assistant", content: null, tool_calls: m.tool_calls };
+                }
+                const text = typeof m.content === 'string' ? m.content : "Displaying rich content.";
+                return m.role === 'agent'
+                    ? { role: 'assistant', content: text.slice(0, 4000) }
+                    : { role: 'user', content: text.slice(0, MAX_QUESTION_LENGTH) };
+            });
 
             // Model, limits and the Groq key live server-side in api/chat.js,
             // which also meters tokens per visitor
             const response = await fetch("/api/chat", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ messages: apiMessages, tools: [githubActivityToolDefinition] }),
+                body: JSON.stringify({ messages: apiMessages, tone: toneRef.current }),
                 signal: abortControllerRef.current.signal
             });
 
@@ -446,8 +443,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ tone, activePrompt, onPro
                 if (!alive()) return;
                 if (data.quota) setQuota(data.quota);
                 if (data.error === 'quota_exhausted' && data.quota) sayAndFinish(exhaustedMessage(data.quota));
-                else if (data.error === 'rate_limited') sayAndFinish("That's a lot of questions in a row — give me a minute to catch my breath, then ask again.");
-                else sayAndFinish("The model is busy right now (too many visitors at once). Try again in a minute — the topic shortcuts still work meanwhile.");
+                else if (data.error === 'rate_limited') sayAndFinish("That's a lot of questions in a row. Give me a minute to catch my breath, then ask again.");
+                else sayAndFinish("The model is busy right now (too many visitors at once). Try again in a minute. The topic shortcuts still work meanwhile.");
                 return;
             }
             if (!response.ok) {
@@ -486,7 +483,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ tone, activePrompt, onPro
                         const data = JSON.parse(dataStr);
 
                         // Final event from our proxy with the updated allowance
-                        if (data.quota) { setQuota(data.quota); continue; }
+                        if (data.quota) {
+                            setQuota(data.quota);
+                            if (data.model) setLastModel(data.model);
+                            continue;
+                        }
 
                         const deltaTools = data.choices?.[0]?.delta?.tool_calls;
                         if (deltaTools && deltaTools.length > 0) {
@@ -508,7 +509,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ tone, activePrompt, onPro
                             const trace = snapshotTrace(true);
                             setMessages(prev => [...prev, { id, role: 'agent', content: '', isStreaming: true, trace }]);
                         }
-                        writer!.push(keepRelevantWidgets(fullContent, input));
+                        writer!.push(cleanModelAnswer(fullContent, input));
                     } catch (e) {
                         console.error("Error parsing stream chunk, skipped:", e, "Raw string:", line);
                     }
@@ -551,7 +552,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ tone, activePrompt, onPro
 
             // The model sometimes forgets the {{GITHUB}} tag after using the tool
             const usedGithubTool = currentMessages.some(m => m.role === 'tool' && m.name === 'fetch_github_activity');
-            const answer = keepRelevantWidgets(fullContent, input);
+            const answer = cleanModelAnswer(fullContent, input);
             const finalOutput = usedGithubTool && !answer.includes('{{GITHUB}}')
                 ? answer + "\n\n{{GITHUB}}"
                 : answer;
@@ -622,8 +623,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ tone, activePrompt, onPro
                     >
                         <ArrowLeft size={13} className="hidden desk:block" />
                         <Menu size={13} className="desk:hidden" />
-                        <span className="hidden desk:inline">More topics in the sidebar — all free, no tokens</span>
-                        <span className="desk:hidden">Tap here for all topics — free, no tokens</span>
+                        <span className="hidden desk:inline">More topics in the sidebar, all free with no tokens</span>
+                        <span className="desk:hidden">Tap here for all topics, free with no tokens</span>
                     </button>
                     <p className="order-4 sm:order-none mx-auto mb-2 sm:mb-0 sm:mt-3 px-6 text-center text-[11px] text-subtle">
                         {PRIVACY_NOTE}
@@ -677,7 +678,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ tone, activePrompt, onPro
                             <button onClick={onBrowseTopics} className="hover:text-fg hover:underline underline-offset-2 transition-colors">
                                 Browse all topics
                             </button>
-                            {' '}(free) · AI answers can be wrong — the résumé is the source of truth. {PRIVACY_NOTE}
+                            {' '}(free) · AI answers can be wrong; the résumé is the source of truth. {PRIVACY_NOTE}
                         </p>
                     </div>
                 </>

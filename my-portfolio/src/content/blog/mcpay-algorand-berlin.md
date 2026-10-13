@@ -1,6 +1,6 @@
 ---
-title: Building mcpay — Stripe for AI Agents at the Algorand x402 Hackathon (Berlin)
-excerpt: A payment layer that lets agents buy MCP tools on-demand, settled on-chain per tool call. Built in 36 hours in Berlin — 23 paid calls served for $0.0037.
+title: Building mcpay, Stripe for AI Agents, at the Algorand x402 Hackathon (Berlin)
+excerpt: A payment layer that lets agents buy MCP tools on-demand, settled on-chain per tool call. Built in 36 hours in Berlin: 23 paid calls served for $0.0037.
 date: 2026-06-09
 readTime: 7 min read
 category: Hackathon
@@ -9,9 +9,9 @@ author: Mirang Bhandari
 authorTitle: Software Engineer
 ---
 
-TLDR, I spent the weekend of **June 6–7 2026** at **42 Berlin** for the **Algorand Builders: Agentic Commerce x402 Hackathon** a 36-hour sprint with 110+ builders and 42 projects submitted. Our team of five built **mcpay**, a payment layer that lets an AI agent discover a specialised `MCP` tool, pay for it on-chain, and call it all without a single API key, signup form, or subscription.
+TLDR, I spent the weekend of **June 6-7 2026** at **42 Berlin** for the **Algorand Builders: Agentic Commerce x402 Hackathon**, a 36-hour sprint with 110+ builders and 42 projects submitted. Our team of five built **mcpay**, a payment layer that lets an AI agent discover a specialised `MCP` tool, pay for it on-chain, and call it, all without a single API key, signup form, or subscription.
 
-![Algorand Agentic Commerce x402 Hackathon — builders at 42 Berlin](algorand-berlin-team.jpg "The Algorand x402 crowd at 42 Berlin")
+![Algorand Agentic Commerce x402 Hackathon: builders at 42 Berlin](algorand-berlin-team.jpg "The Algorand x402 crowd at 42 Berlin")
 
 ## The Problem
 
@@ -33,7 +33,7 @@ If a tool call costs a fraction of a cent, the only billing model that makes sen
 - **Reference servers** working paid MCP servers for CoinGecko market data and Wikipedia
 - **Agent demo** a `Claude` agent that discovers tools through the registry and pays for them by itself
 
-## The Server Side — One Function Call
+## The Server Side: One Function Call
 
 The design constraint we set early was that **making a tool paid should not change the tool**. A server author writes a normal `FastMCP` server, then wraps it. That is the whole integration.
 
@@ -59,7 +59,7 @@ if __name__ == "__main__":
 
 Behind that one call the SDK publishes a pricing manifest at `/.well-known/mcp-pricing.json`, installs a sliding-window rate limiter at **120 requests per IP per minute**, and prints a startup banner listing which protection layers are actually live so you are never guessing whether the paywall is on.
 
-## The Agent Side — Budget Caps, Not Trust
+## The Agent Side: Budget Caps, Not Trust
 
 The thing that makes agents-with-wallets frightening is unbounded spend. So the agent client takes a hard budget and refuses over-budget calls **locally, before anything touches the chain**. The agent also does not need to know which gateway owns which tool `connect_multi` routes each call to the right one.
 
@@ -110,7 +110,7 @@ We closed it with **SHA-256 rotating bearer tokens** on 60-second windows betwee
 
 ## The Demo
 
-![mcpay marketplace live dashboard during the demo at 42 Berlin](algorand-berlin-demo.jpg "Demoing the live marketplace — 2 servers, 4 tools, 23 calls served")
+![mcpay marketplace live dashboard during the demo at 42 Berlin](algorand-berlin-demo.jpg "Demoing the live marketplace: 2 servers, 4 tools, 23 calls served")
 
 What we put on screen was a `Claude` agent given a plain-language task, with no tools of its own and a funded wallet. It queried the registry, found a tool it did not have, paid for it, and used it and the dashboard behind it ticked up in real time. By the end of the demo the counter read **23 calls served** for a grand total of **$0.0037**.
 

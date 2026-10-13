@@ -9,7 +9,7 @@
  */
 
 const TOPICS = 'my **projects**, **work experience**, **skills**, **résumé** or **recent GitHub activity**';
-const FREE_NOTE = 'Those topics — and the buttons in the sidebar — answer instantly and are always free.';
+const FREE_NOTE = 'Those topics, and the buttons in the sidebar, answer instantly and are always free.';
 
 type Rule = { match: RegExp; replies: string[] };
 
@@ -20,14 +20,14 @@ const RULES: Rule[] = [
     {
         match: /^(?:hi+|hey+|hello+|heya|hiya|yo|sup|howdy|hallo|servus|moin|namaste|greetings|good (?:morning|afternoon|evening|day)|guten (?:tag|morgen|abend))(?:\s+(?:there|mirang|everyone|all|again|friend))?$/,
         replies: [
-            `Hi! 👋 I'm Mirang's portfolio assistant. Ask me about ${TOPICS} — or anything else about my work.`,
+            `Hi! 👋 I'm Mirang's portfolio assistant. Ask me about ${TOPICS}, or anything else about my work.`,
             `Hey, welcome! Want to start with ${TOPICS}? ${FREE_NOTE}`,
         ],
     },
     {
         match: new RegExp(`^${GREET}(?:how are you|how r u|how are you doing|hows it going|how is it going|how are things|whats up|wassup|whats new|how do you do)(?:\\s+(?:today|doing|mirang))?$`),
         replies: [
-            `Doing well, thanks for asking! What would you like to know — ${TOPICS}?`,
+            `Doing well, thanks for asking! Would you like to hear about ${TOPICS}?`,
             `All good here! I'm happy to walk you through ${TOPICS}.`,
         ],
     },
@@ -35,7 +35,7 @@ const RULES: Rule[] = [
         match: /^(?:thanks?|thank you|thank u|thx|ty|tysm|cheers|danke|danke schön|dankeschön|appreciate it|much appreciated|thanks a lot|thanks so much|thank you so much|great thanks|ok thanks|okay thanks|cool thanks|perfect thanks)(?:\s+(?:mirang|a lot|so much|again))?$/,
         replies: [
             `You're welcome! Anything else you'd like to know? If you'd like to reach me directly, just ask for the **contact form**.`,
-            `Happy to help! Feel free to ask about anything else — or say **contact me** to send me a message.`,
+            `Happy to help! Feel free to ask about anything else, or say **contact me** to send me a message.`,
         ],
     },
     {
@@ -55,7 +55,7 @@ const RULES: Rule[] = [
     {
         match: /^(?:are you|r u|is this|am i talking to|am i chatting with)\s+(?:(?:a|an|the|really|actually|real|just)\s+)*(?:bot|ai|robot|human|person|real|chatgpt|gpt|llm|mirang|him|you|machine)(?:\s+or\s+(?:a\s+)?(?:bot|ai|human|real|robot))?$/,
         replies: [
-            `I'm an AI assistant that answers as Mirang, using his profile and résumé — not Mirang typing live. For a real conversation with him, say **contact me** and send a message.`,
+            `I'm an AI assistant that answers as Mirang, using his profile and résumé. It's not Mirang typing live. For a real conversation with him, say **contact me** and send a message.`,
         ],
     },
     {
@@ -71,13 +71,13 @@ const RULES: Rule[] = [
     {
         match: /^(?:who (?:made|built|created|designed|coded) (?:this|you|this site|this website|this page|this chatbot)|is this your (?:site|website|portfolio))$/,
         replies: [
-            `I built this myself — AgentFolio is a chat-first portfolio (React, TypeScript, Vite, Tailwind) where common questions are answered instantly and everything else goes to an LLM through a serverless proxy. Ask about my **projects** for more.`,
+            `I built this myself. AgentFolio is a chat-first portfolio (React, TypeScript, Vite, Tailwind) where common questions are answered instantly and everything else goes to an LLM through a serverless proxy. Ask about my **projects** for more.`,
         ],
     },
     {
         match: /^(?:(?:this is |what a |such a )?(?:nice|cool|great|awesome|amazing|beautiful|clean|impressive|sick|love (?:the|this|your)) (?:site|website|portfolio|page|design|ui|work|idea|chatbot|bot)|love it|love this|well done|good job|great job|great work|nice work|impressive)$/,
         replies: [
-            `Thank you, that's kind! 😊 It's built as a chat on purpose — ask about my **projects** to see what else I've made.`,
+            `Thank you, that's kind! 😊 It's built as a chat on purpose, so ask about my **projects** to see what else I've made.`,
         ],
     },
     {

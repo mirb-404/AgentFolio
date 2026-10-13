@@ -4,9 +4,14 @@
  * The Groq key never reaches the browser. Every visitor (keyed by a salted
  * hash of their IP, so refreshing or clearing storage doesn't reset it) gets
  * a token allowance per rolling window, and all visitors together share a
- * daily budget kept under Groq's own free-tier tokens-per-day cap.
+ * daily budget kept under Groq's own free-tier caps.
  *
- *   GET  /api/chat  → current quota for the caller
+ * Capacity: Groq's free-tier limits are tracked per model (each has ~200K
+ * tokens/day, 8K tokens/min, 1K requests/day). So the proxy rotates through
+ * several models — when one is near its daily cap or answers 429, the next
+ * one takes the request. Three models ≈ 3× the daily and per-minute capacity.
+ *
+ *   GET  /api/chat  → current quota for the caller, plus the model list
  *   POST /api/chat  → streams the Groq SSE response, then one final
  *                     `data: {"quota": …}` event with the updated numbers
  *
@@ -15,91 +20,52 @@
  * read them with `npm run questions`. Canned answers never reach this
  * endpoint, so only questions that cost tokens are logged.
  *
- * Usage is stored in Upstash Redis (Vercel Marketplace → Upstash for Redis,
- * which sets KV_REST_API_URL / KV_REST_API_TOKEN). Without it the counters
- * live in memory — fine for local dev, NOT enforced across serverless
- * instances in production.
+ * Abuse protection: the system prompt and tools are fixed server-side (the
+ * browser only sends the conversation and a tone), every message is rebuilt
+ * from known fields with size caps, cross-site browser requests are refused,
+ * and IPv6 visitors are grouped by /64 network so one connection can't rotate
+ * through addresses to reset its quota.
+ *
+ * Usage is stored in Upstash Redis (see _lib/redis.js). Without it the
+ * counters live in memory: fine for local dev, NOT enforced across
+ * serverless instances in production.
  */
 import { createHash } from 'node:crypto';
 import { retrieve } from './_lib/knowledge.js';
+import { redis } from './_lib/redis.js';
+import { buildSystemPrompt, isTone, TOOLS } from './_lib/prompt.js';
 
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
-const MODEL = 'openai/gpt-oss-20b';
-const MAX_OUTPUT_TOKENS = 1500;
+// Answers are meant to be short; this also caps hidden reasoning tokens
+const MAX_OUTPUT_TOKENS = 1000;
 
 const num = (v, fallback) => (Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : fallback);
+
+// Tried in order. All support streaming + tool calls on Groq's free tier.
+const MODELS = (process.env.CHAT_MODELS || 'openai/gpt-oss-20b,openai/gpt-oss-120b,qwen/qwen3.8-27b')
+    .split(',').map(m => m.trim()).filter(Boolean);
+// Stop sending to a model a little before Groq's 200K/day cap, leaving room
+// for api/github-summary.js (which uses gpt-oss-20b, but is CDN-cached)
+const MODEL_DAILY_TOKENS = num(process.env.CHAT_MODEL_DAILY_TOKENS, 190_000);
+// gpt-oss accepts low/medium/high; Qwen accepts none/default ("none" = no hidden reasoning tokens)
+const reasoningFor = (model) => (model.startsWith('qwen/') ? 'none' : 'low');
+
 // Per visitor: tokens allowed per rolling window, starting at their first message
-const IP_LIMIT = num(process.env.CHAT_IP_TOKEN_LIMIT, 30_000);
+const IP_LIMIT = num(process.env.CHAT_IP_TOKEN_LIMIT, 50_000);
 const IP_WINDOW_S = num(process.env.CHAT_IP_WINDOW_HOURS, 24) * 3600;
-// Everyone combined, per UTC day. Groq's free tier caps gpt-oss-20b at 200K
-// tokens/day; the default leaves headroom for the GitHub summary function.
-const GLOBAL_LIMIT = num(process.env.CHAT_GLOBAL_TOKEN_LIMIT, 150_000);
+// Everyone combined, per UTC day — by default, what all the models can serve
+const GLOBAL_LIMIT = num(process.env.CHAT_GLOBAL_TOKEN_LIMIT, MODELS.length * MODEL_DAILY_TOKENS);
 // Burst guard so parallel requests can't race past the budget before it's counted
 const REQS_PER_MIN = num(process.env.CHAT_IP_REQUESTS_PER_MIN, 8);
 
 const MAX_MESSAGES = 14;
-const MAX_CHARS = 24_000;
+const MAX_CHARS = 24_000;                                            // whole conversation
+const MAX_LEN = { user: 1_500, assistant: 4_000, tool: 6_000 };      // per message
+const TOOL_NAME = TOOLS[0].function.name;
 
 // Question log: newest first, capped so it can't grow without bound
 const LOG_KEY = 'chat:questions';
 const LOG_MAX = 2000;
-
-// --- Storage ----------------------------------------------------------------
-
-const REDIS_URL = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
-const REDIS_TOKEN = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
-
-/** In-memory stand-in for Redis: { key: { value, expiresAt } } */
-const memory = new Map();
-const memGet = (key) => {
-    const hit = memory.get(key);
-    if (hit && hit.expiresAt <= Date.now()) { memory.delete(key); return undefined; }
-    return hit;
-};
-
-/** Runs Redis commands in one round trip; each result is the command's reply */
-async function redis(commands) {
-    if (REDIS_URL && REDIS_TOKEN) {
-        const res = await fetch(`${REDIS_URL}/pipeline`, {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${REDIS_TOKEN}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify(commands),
-        });
-        if (!res.ok) throw new Error(`Redis ${res.status}`);
-        const out = await res.json();
-        return out.map(r => r.result);
-    }
-    // Only the handful of commands used below
-    return commands.map(([cmd, key, arg, flag]) => {
-        const hit = memGet(key);
-        switch (cmd) {
-            case 'GET': return hit ? String(hit.value) : null;
-            case 'TTL': return hit ? (hit.expiresAt === Infinity ? -1 : Math.ceil((hit.expiresAt - Date.now()) / 1000)) : -2;
-            case 'INCRBY': {
-                const value = (hit ? Number(hit.value) : 0) + Number(arg);
-                memory.set(key, { value, expiresAt: hit ? hit.expiresAt : Infinity });
-                return value;
-            }
-            case 'EXPIRE': {
-                if (!hit) return 0;
-                if (flag === 'NX' && hit.expiresAt !== Infinity) return 0;
-                hit.expiresAt = Date.now() + Number(arg) * 1000;
-                return 1;
-            }
-            case 'LPUSH': {
-                const list = hit ? hit.value : [];
-                list.unshift(arg);
-                memory.set(key, { value: list, expiresAt: Infinity });
-                return list.length;
-            }
-            case 'LTRIM': {
-                if (hit) hit.value = hit.value.slice(Number(arg), Number(flag) + 1);
-                return 'OK';
-            }
-            default: throw new Error(`unsupported ${cmd}`);
-        }
-    });
-}
 
 // --- Identity & quota -------------------------------------------------------
 
@@ -109,9 +75,22 @@ function clientIp(request) {
     return (fwd && fwd.split(',')[0].trim()) || request.headers.get('x-real-ip') || 'local';
 }
 
+/**
+ * IPv4 as-is; IPv6 by its /64 network. A single home or phone connection gets
+ * a whole /64 (billions of addresses), so per-address limits would be useless.
+ */
+function visitorNetwork(ip) {
+    if (!ip.includes(':')) return ip;
+    const [head, tail = ''] = ip.split('::');
+    const left = head ? head.split(':') : [];
+    const right = tail ? tail.split(':') : [];
+    const groups = [...left, ...Array(Math.max(0, 8 - left.length - right.length)).fill('0'), ...right];
+    return `${groups.slice(0, 4).map(g => g.toLowerCase().replace(/^0+(?=.)/, '')).join(':')}::/64`;
+}
+
 function visitorKey(request) {
     const salt = process.env.CHAT_IP_SALT || 'agentfolio';
-    const hash = createHash('sha256').update(`${salt}:${clientIp(request)}`).digest('hex').slice(0, 32);
+    const hash = createHash('sha256').update(`${salt}:${visitorNetwork(clientIp(request))}`).digest('hex').slice(0, 32);
     return `chat:ip:${hash}`;
 }
 
@@ -157,6 +136,24 @@ async function charge(ipKey, tokens) {
     ]);
 }
 
+// --- Model rotation -----------------------------------------------------------
+
+const modelKey = (model) => `chat:model:${model}:${utcDay()}`;
+const coolKey = (model) => `chat:cool:${model}`;
+
+/** Models that are under their daily budget and not cooling down after a 429, in order */
+async function availableModels() {
+    const state = await redis(MODELS.flatMap(m => [['GET', modelKey(m)], ['GET', coolKey(m)]]));
+    return MODELS.filter((_, i) => (Number(state[i * 2]) || 0) < MODEL_DAILY_TOKENS && !state[i * 2 + 1]);
+}
+
+/** After a 429, skip this model for as long as Groq asked (clamped to 5 s – 1 h) */
+const coolDown = (model, seconds) =>
+    redis([['SET', coolKey(model), '1', 'EX', Math.min(3600, Math.max(5, Math.ceil(seconds) || 60))]]).catch(() => {});
+
+const chargeModel = (model, tokens) =>
+    redis([['INCRBY', modelKey(model), tokens], ['EXPIRE', modelKey(model), 26 * 3600, 'NX']]).catch(() => {});
+
 async function overRequestRate(ipKey) {
     const key = `${ipKey}:rpm:${Math.floor(Date.now() / 60_000)}`;
     const [count] = await redis([['INCRBY', key, 1], ['EXPIRE', key, 70, 'NX']]);
@@ -188,9 +185,9 @@ function withProfileNotes(messages) {
 }
 
 /** Best-effort: a logging failure must never break the chat */
-async function logQuestion(question, answer, tokens) {
+async function logQuestion(question, answer, tokens, model) {
     if (!question || process.env.CHAT_LOG_QUESTIONS === 'off') return;
-    const entry = JSON.stringify({ at: new Date().toISOString(), q: question.slice(0, 500), a: answer.slice(0, 2000), tokens });
+    const entry = JSON.stringify({ at: new Date().toISOString(), q: question.slice(0, 500), a: answer.slice(0, 2000), tokens, model });
     await redis([['LPUSH', LOG_KEY, entry], ['LTRIM', LOG_KEY, 0, LOG_MAX - 1]]).catch(err => console.error('question log failed:', err));
 }
 
@@ -207,17 +204,63 @@ const apiKey = () => process.env.GROQ_API_KEY || process.env.VITE_GROQ_API_KEY;
 /** Rough pre-count (≈4 chars per token) used only to reserve budget up front */
 const estimateTokens = (messages) => Math.ceil(JSON.stringify(messages).length / 4);
 
-function validMessages(messages) {
-    if (!Array.isArray(messages) || messages.length === 0 || messages.length > MAX_MESSAGES) return false;
-    if (JSON.stringify(messages).length > MAX_CHARS) return false;
-    return messages.every(m => m && typeof m === 'object' && ['system', 'user', 'assistant', 'tool'].includes(m.role));
+const isString = (v, max) => typeof v === 'string' && v.length <= max;
+
+/**
+ * Rebuilds the conversation from known fields only, or returns null if
+ * anything is off. Callers can't add system messages, other tools, or extra
+ * request parameters, and no single message can be oversized.
+ */
+function cleanMessages(messages) {
+    if (!Array.isArray(messages) || messages.length === 0 || messages.length > MAX_MESSAGES) return null;
+    if (JSON.stringify(messages).length > MAX_CHARS) return null;
+    const out = [];
+    for (const m of messages) {
+        if (!m || typeof m !== 'object') return null;
+        if (m.role === 'user') {
+            if (!isString(m.content, MAX_LEN.user) || !m.content.trim()) return null;
+            out.push({ role: 'user', content: m.content });
+        } else if (m.role === 'assistant' && Array.isArray(m.tool_calls)) {
+            const call = m.tool_calls[0];
+            if (m.tool_calls.length !== 1 || call?.function?.name !== TOOL_NAME || !isString(call.id, 100)
+                || !isString(call.function.arguments ?? '', 500)) return null;
+            out.push({ role: 'assistant', content: null, tool_calls: [{ id: call.id, type: 'function', function: { name: TOOL_NAME, arguments: call.function.arguments ?? '{}' } }] });
+        } else if (m.role === 'assistant') {
+            if (!isString(m.content, MAX_LEN.assistant)) return null;
+            out.push({ role: 'assistant', content: m.content });
+        } else if (m.role === 'tool') {
+            if (!isString(m.content, MAX_LEN.tool) || !isString(m.tool_call_id, 100)) return null;
+            out.push({ role: 'tool', content: m.content, tool_call_id: m.tool_call_id, name: TOOL_NAME });
+        } else {
+            return null; // includes 'system': the server owns the instructions
+        }
+    }
+    return out.at(-1).role === 'assistant' ? null : out;
+}
+
+/**
+ * Browsers always send Origin on POST. Refuse other websites' pages; scripts
+ * that omit or fake it are still bound by the per-visitor quota. Extra allowed
+ * origins (e.g. a custom domain) can be listed in CHAT_ALLOWED_ORIGINS.
+ */
+function allowedOrigin(request) {
+    const origin = request.headers.get('origin');
+    if (!origin) return true;
+    try {
+        const host = new URL(origin).host;
+        const extra = (process.env.CHAT_ALLOWED_ORIGINS || '').split(',').map(o => o.trim()).filter(Boolean);
+        return host === request.headers.get('host') || extra.some(o => o === origin || o === host)
+            || /^(localhost|127\.0\.0\.1)(:\d+)?$/.test(host);
+    } catch {
+        return false;
+    }
 }
 
 // --- Handlers ---------------------------------------------------------------
 
 export async function GET(request) {
     try {
-        return json({ quota: await readQuota(visitorKey(request)) });
+        return json({ quota: await readQuota(visitorKey(request)), models: MODELS });
     } catch (err) {
         console.error('quota read failed:', err);
         return json({ error: 'quota unavailable' }, 503);
@@ -228,10 +271,13 @@ export async function POST(request) {
     const key = apiKey();
     if (!key) return json({ error: 'GROQ_API_KEY is not set on the server.' }, 500);
 
+    if (!allowedOrigin(request)) return json({ error: 'forbidden' }, 403);
+
     let body;
     try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
-    const { messages, tools } = body ?? {};
-    if (!validMessages(messages)) return json({ error: 'Invalid or oversized conversation' }, 400);
+    const messages = cleanMessages(body?.messages);
+    if (!messages) return json({ error: 'Invalid or oversized conversation' }, 400);
+    const tone = isTone(body?.tone) ? body.tone : 'default';
 
     const ipKey = visitorKey(request);
     let quota;
@@ -246,22 +292,22 @@ export async function POST(request) {
     }
     if (quota.exhausted) return json({ error: 'quota_exhausted', quota }, 429);
 
-    const prompt = withProfileNotes(messages);
+    const prompt = withProfileNotes([{ role: 'system', content: buildSystemPrompt(tone) }, ...messages]);
 
     // Reserve the prompt cost now so concurrent requests see it; settled to
     // Groq's exact count once the stream ends
     const reserved = estimateTokens(prompt);
     await charge(ipKey, reserved).catch(() => {});
 
-    const upstream = await fetch(GROQ_URL, {
+    const callModel = (model) => fetch(GROQ_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
         body: JSON.stringify({
-            model: MODEL,
-            reasoning_effort: 'low',
+            model,
+            reasoning_effort: reasoningFor(model),
             messages: prompt,
-            // Only the tools the site actually implements
-            ...(Array.isArray(tools) && tools.length ? { tools: tools.slice(0, 2), tool_choice: 'auto' } : {}),
+            tools: TOOLS,
+            tool_choice: 'auto',
             stream: true,
             stream_options: { include_usage: true },
             // Low temperature: answers should stick to the profile notes, not improvise
@@ -271,17 +317,27 @@ export async function POST(request) {
         signal: request.signal,
     }).catch(err => err);
 
-    if (upstream instanceof Error || !upstream.ok || !upstream.body) {
+    // First model that accepts the request wins; a 429 benches that model for a while
+    const candidates = await availableModels().catch(() => MODELS);
+    let upstream = null;
+    let model = null;
+    let lastStatus = 429;
+    for (const candidate of candidates) {
+        const res = await callModel(candidate);
+        if (!(res instanceof Error) && res.ok && res.body) { upstream = res; model = candidate; break; }
+        if (res instanceof Error && res.name === 'AbortError') break; // visitor pressed Stop
+        lastStatus = res instanceof Error ? 502 : res.status;
+        if (lastStatus === 429) await coolDown(candidate, Number(res.headers.get('retry-after')));
+        else console.error('Groq error:', candidate, lastStatus, res instanceof Error ? res.message : await res.text().catch(() => ''));
+    }
+
+    if (!upstream) {
         // Nothing was generated — hand the reservation back
         await charge(ipKey, -reserved).catch(() => {});
-        const status = upstream instanceof Error ? 502 : upstream.status;
-        if (status === 429) {
-            // Groq's own per-minute/day limit, shared by every visitor
-            const retry = upstream.headers?.get('retry-after') || '60';
-            return json({ error: 'upstream_busy', quota: await readQuota(ipKey).catch(() => null) }, 429, { 'Retry-After': retry });
+        if (lastStatus === 429) {
+            // Every model is at Groq's per-minute or daily limit, shared by all visitors
+            return json({ error: 'upstream_busy', quota: await readQuota(ipKey).catch(() => null) }, 429, { 'Retry-After': '60' });
         }
-        const detail = upstream instanceof Error ? upstream.message : await upstream.text().catch(() => '');
-        console.error('Groq error:', status, detail);
         return json({ error: 'upstream_error' }, 502);
     }
 
@@ -327,15 +383,15 @@ export async function POST(request) {
             // generated (plus hidden reasoning) so Stop can't dodge the meter
             const cost = actual || reserved + Math.min(MAX_OUTPUT_TOKENS, Math.ceil((answer.length + reasoningChars) / 4) + 200);
             try {
-                await charge(ipKey, cost - reserved);
+                await Promise.all([charge(ipKey, cost - reserved), chargeModel(model, cost)]);
                 const quota = await readQuota(ipKey);
-                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ quota })}\n\n`));
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ quota, model })}\n\n`));
             } catch (err) {
                 console.error('quota settle failed:', err);
             }
             // Before closing: work after the response ends may be cut off on Vercel.
             // A turn that only asked for a tool has no text; the follow-up logs it.
-            if (answer) await logQuestion(lastQuestion(messages), answer, cost);
+            if (answer) await logQuestion(lastQuestion(messages), answer, cost, model);
             try { controller.close(); } catch { /* already closed */ }
         },
     });

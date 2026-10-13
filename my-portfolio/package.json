@@ -9,7 +9,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "resume:sync": "node scripts/resume-sync.mjs",
-    "questions": "node --env-file-if-exists=.env scripts/questions.mjs",
+    "questions": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/questions.mjs",
     "kb": "node scripts/knowledge-build.mjs"
   },
   "dependencies": {

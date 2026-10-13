@@ -68,7 +68,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 <div className="flex flex-col h-full w-[280px] desk:w-[260px] p-2 pt-[max(0.5rem,env(safe-area-inset-top))] pb-[max(0.5rem,env(safe-area-inset-bottom))]">
                     {/* Brand + collapse */}
                     <div className="flex items-center justify-between h-11 px-1.5 mb-1">
-                        <button onClick={onNewChat} className="flex items-center gap-2 rounded-lg px-1 py-1 text-fg" title="AgentFolio — New chat">
+                        <button onClick={onNewChat} className="flex items-center gap-2 rounded-lg px-1 py-1 text-fg" title="AgentFolio: new chat">
                             <LogoMark size={22} />
                             <span className="font-semibold text-[15px] tracking-[-0.02em]">AgentFolio</span>
                         </button>

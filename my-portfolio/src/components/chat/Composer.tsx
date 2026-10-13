@@ -5,6 +5,7 @@ import { ArrowUp, Square } from 'lucide-react';
 import UsageRing from './UsageRing';
 import type { Quota } from '../../lib/quota';
 import { getPredefinedResponse } from '../../lib/cannedAnswers';
+import { MAX_QUESTION_LENGTH } from '../../lib/quota';
 
 interface ComposerProps {
     onSend: (text: string) => void;
@@ -93,6 +94,7 @@ const Composer: React.FC<ComposerProps> = ({ onSend, onStop, busy, autoFocus, qu
                     id="composer"
                     ref={ref}
                     rows={1}
+                    maxLength={MAX_QUESTION_LENGTH}
                     value={value}
                     autoFocus={autoFocus}
                     onChange={(e) => setValue(e.target.value)}
@@ -110,13 +112,13 @@ const Composer: React.FC<ComposerProps> = ({ onSend, onStop, busy, autoFocus, qu
                             submit();
                         }
                     }}
-                    aria-label="Message — ask about projects, skills, experience, or anything else"
+                    aria-label="Message: ask about projects, skills, experience, or anything else"
                     className="relative block w-full resize-none bg-transparent outline-none text-base leading-6 py-1.5 text-fg placeholder:text-subtle"
                     style={{ maxHeight: MAX_HEIGHT }}
                 />
             </div>
             <span
-                title="Answered instantly from Mirang's profile — doesn't use your AI allowance"
+                title="Answered instantly from Mirang's profile, so it doesn't use your AI allowance"
                 aria-hidden={!free}
                 className={`h-9 shrink-0 flex items-center transition-opacity duration-200 ${free ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
             >

@@ -1,6 +1,6 @@
 ---
 title: Building TenderFlow at Q-Hack (Mannheim, Germany)
-excerpt: How our team built an AI-powered RFP automation platform in 24 hours — slashing tender costs from €25k to ~€100 in tokens.
+excerpt: How our team built an AI-powered RFP automation platform in 24 hours, slashing tender costs from €25k to ~€100 in tokens.
 date: 2026-05-03
 readTime: 5 min read
 category: Hackathon
@@ -21,7 +21,7 @@ If **80%** of tender writing is retrieving and reformatting existing content, an
 
 ## What We Built
 
-![Q-Hack hackathon — TenderFlow team at Mannheim, Germany](q-hack.jpg "The Q-Hack Team")
+![Q-Hack hackathon: TenderFlow team at Mannheim, Germany](q-hack.jpg "The Q-Hack Team")
 
 **TenderFlow** is an AI agent that takes a raw RFP document containing basic details of the tender and produces a structured, high-quality draft response instantaneously. It pulls from an organisation's internal knowledge base (past tenders, CVs, methodology docs) using `vector search`, drafts each section with `Claude`, scores the output across seven quality dimensions, and then hands control back to a human reviewer before anything goes out the door.
 
@@ -49,7 +49,7 @@ workflow.add_node("human_review",    human_review)   # HITL interrupt
 workflow.add_node("polish",          polish_sections)
 workflow.add_node("export",          export_docx)
 
-# graph pauses at human_review — resumes via API after edits
+# graph pauses at human_review, resumes via API after edits
 workflow.add_edge("draft_sections", "human_review")
 workflow.add_edge("human_review",   "polish")
 ```
@@ -62,7 +62,7 @@ Full automation was never the goal. Tenders are legal documents you need a human
 
 ## The Numbers
 
-A typical tender submission costs **€20k–€30k** in consultant time. TenderFlow brings that down to roughly **€100** in `API` tokens with a human reviewer still in the loop for quality and compliance. That's not a marginal improvement it's a different order of magnitude.
+A typical tender submission costs **€20k-€30k** in consultant time. TenderFlow brings that down to roughly **€100** in `API` tokens, with a human reviewer still in the loop for quality and compliance. That's not a marginal improvement; it's a different order of magnitude.
 
 ---
 
@@ -74,6 +74,6 @@ The thing I took away at the end of **Q-Hack** was
 
 > The best AI products right now aren't about replacing humans they're about removing the tedious parts of a job so the expert can focus on the 20% that actually requires their judgement. That's what TenderFlow does, and it's a pattern worth building on.
 >
-> — Mirang Bhandari
+> -- Mirang Bhandari
 
 ![q_hack_imgr](q-hack_venue.jpg "Q-Hack Venue")

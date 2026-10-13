@@ -37,7 +37,20 @@ const MD_COMPONENTS: Components = {
     h1: ({ node, ...props }) => <h1 className="text-xl font-semibold mt-6 mb-3 first:mt-0" {...props} />,
     h2: ({ node, ...props }) => <h2 className="text-lg font-semibold mt-6 mb-3 first:mt-0" {...props} />,
     h3: ({ node, ...props }) => <h3 className="text-base font-semibold mt-5 mb-2 first:mt-0" {...props} />,
+    h4: ({ node, ...props }) => <h4 className="text-base font-semibold mt-4 mb-1.5 first:mt-0" {...props} />,
     blockquote: ({ node, ...props }) => <blockquote className="border-l-2 border-line-strong pl-4 my-3 text-muted" {...props} />,
+    hr: ({ node, ...props }) => <hr className="my-6 border-line" {...props} />,
+    // Fenced code: a scrollable block; the inline `code` style is undone inside it
+    pre: ({ node, ...props }) => <pre className="my-3 overflow-x-auto rounded-xl bg-raised p-4 text-sm leading-6 [&>code]:bg-transparent [&>code]:p-0 [&>code]:text-[0.95em]" {...props} />,
+    // Tables scroll sideways on phones instead of squashing their columns
+    table: ({ node, ...props }) => (
+        <div className="my-4 overflow-x-auto rounded-xl border border-line">
+            <table className="w-full border-collapse text-left text-[0.92em] leading-6" {...props} />
+        </div>
+    ),
+    thead: ({ node, ...props }) => <thead className="bg-raised" {...props} />,
+    th: ({ node, ...props }) => <th className="px-3.5 py-2 font-semibold text-fg whitespace-nowrap border-b border-line" {...props} />,
+    td: ({ node, ...props }) => <td className="px-3.5 py-2 align-top text-muted border-b border-line [tr:last-child>&]:border-b-0" {...props} />,
 };
 
 const MD_PLUGINS = [remarkGfm];

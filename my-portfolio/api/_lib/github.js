@@ -1,5 +1,8 @@
 // Shared by the GitHub endpoints. Vercel doesn't turn `_`-prefixed paths
 // inside /api into functions, so this stays a plain module.
+//
+// The endpoints only ever serve this one account and ignore query strings,
+// so they can't be used as a free GitHub proxy for other users.
 
 export const GITHUB_USER = 'mirb-404';
 
@@ -7,7 +10,8 @@ export const GITHUB_USER = 'mirb-404';
 export const CACHE_HEADER = 'public, s-maxage=21600, stale-while-revalidate=86400';
 
 const headers = () => {
-    const token = process.env.VITE_GITHUB_TOKEN;
+    // Server-only; the VITE_ name is still read for older deployments
+    const token = process.env.GITHUB_TOKEN || process.env.VITE_GITHUB_TOKEN;
     return token ? { Authorization: `Bearer ${token}` } : {};
 };
 

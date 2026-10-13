@@ -174,7 +174,7 @@ const BlogContent: React.FC<BlogContentProps> = ({
               {renderInline(block.text)}
             </p>
             {block.author && (
-              <footer className="text-xs text-[#aaa] mt-3 not-italic font-mono">— {block.author}</footer>
+              <footer className="text-xs text-[#aaa] mt-3 not-italic font-mono">{block.author}</footer>
             )}
           </blockquote>
         );

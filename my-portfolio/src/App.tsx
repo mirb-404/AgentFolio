@@ -8,6 +8,7 @@ import { preloadResume } from './lib/resume';
 import ChatInterface from './components/chat/ChatInterface';
 import Sidebar from './components/layout/Sidebar';
 import ModelPicker from './components/chat/ModelPicker';
+import PoweredBy from './components/layout/PoweredBy';
 import type { Tone } from './lib/tone';
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/react";
@@ -168,9 +169,13 @@ function App() {
               </div>
             )}
             <ModelPicker tone={tone} onChange={setTone} />
-            <button onClick={handleNewChat} className={`desk:hidden ml-auto ${iconBtn}`} aria-label="New chat">
-              <SquarePen size={19} />
-            </button>
+            {/* Right corner: Groq badge (all screens), then New chat on phones */}
+            <div className="ml-auto flex items-center gap-1">
+              <PoweredBy />
+              <button onClick={handleNewChat} className={`desk:hidden ${iconBtn}`} aria-label="New chat">
+                <SquarePen size={19} />
+              </button>
+            </div>
           </header>
 
           <ChatInterface

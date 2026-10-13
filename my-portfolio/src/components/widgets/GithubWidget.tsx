@@ -27,7 +27,7 @@ const GithubWidget: React.FC = () => {
 
     const stat = (value: number | undefined, label: string) => (
         <div>
-            <div className="text-lg font-semibold text-fg tabular-nums leading-none">{isLoading ? '—' : value ?? 0}</div>
+            <div className="text-lg font-semibold text-fg tabular-nums leading-none">{isLoading ? '…' : value ?? 0}</div>
             <div className="text-xs text-subtle mt-1">{label}</div>
         </div>
     );

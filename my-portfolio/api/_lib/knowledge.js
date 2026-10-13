@@ -9,13 +9,15 @@ import SECTIONS from './knowledge-data.js';
 
 const MAX_SECTIONS = 3;
 const MAX_CHARS = 3600;          // ≈ 900 tokens of context, worst case
+const MAX_NAMED = 4;             // sections a visitor names explicitly ("compare A, B and C")
 const MIN_RELATIVE_SCORE = 0.4;  // drop sections far weaker than the best match
 
 const STOPWORDS = new Set(('a an and are as at be but by can could did do does for from had has have he her his how i ' +
     'if in into is it its me my of on or our she so tell that the their them there these they this to was we were ' +
     'what when where which who why will with would you your about any some more also just than then mirang ' +
     'bhandari him show give know please explain describe experience experienced use used using familiar ' +
-    'good fit much many like really').split(' '));
+    'good fit much many like really say says word words write short sentence sentences one two three hi hey ' +
+    'hello bye thanks thank please okay ok yes no').split(' '));
 
 // Words visitors use → words the profile uses
 const SYNONYMS = {
@@ -48,7 +50,7 @@ function terms(text) {
     const out = [];
     for (const word of text.toLowerCase().match(/[a-z0-9+#]+(?:[./-][a-z0-9+#]+)*/g) ?? []) {
         const parts = /[./-]/.test(word) && !/\d/.test(word) ? [word, ...word.split(/[./-]/)] : [word];
-        for (const p of parts) if (p.length > 1 && !STOPWORDS.has(p)) out.push(p.length > 3 ? stem(p) : p);
+        for (const p of parts) if (p.length > 1 && !/^\d+$/.test(p) && !STOPWORDS.has(p)) out.push(p.length > 3 ? stem(p) : p);
     }
     return out;
 }
@@ -64,6 +66,10 @@ const docs = SECTIONS.map(s => {
 const avgLen = docs.reduce((a, d) => a + d.len, 0) / (docs.length || 1);
 const df = new Map();
 for (const d of docs) for (const t of d.tf.keys()) df.set(t, (df.get(t) ?? 0) + 1);
+// How many section headings contain each word — a word in only one or two
+// headings ("omnic", "keysight") names a specific section
+const titleDf = new Map();
+for (const d of docs) for (const t of new Set(terms(d.title))) titleDf.set(t, (titleDf.get(t) ?? 0) + 1);
 const idf = (t) => Math.log(1 + (docs.length - (df.get(t) ?? 0) + 0.5) / ((df.get(t) ?? 0) + 0.5));
 
 function bm25(doc, query) {
@@ -98,13 +104,22 @@ export function retrieve(question, context = '') {
     const ranked = docs.map(d => ({ d, score: bm25(d, query) })).filter(r => r.score > 0).sort((a, b) => b.score - a.score);
     if (!ranked.length) return '';
 
+    // A word the visitor typed that names a section ("Omnic", "Keysight")
+    // guarantees that section a slot, so "compare A, B and C" covers all three
+    const asked = new Set(terms(question));
+    const named = ranked.filter(({ d }) => terms(d.title).some(t => asked.has(t) && (titleDf.get(t) ?? 0) <= 2));
+    const order = [...named, ...ranked.filter(r => !named.includes(r))];
+    const maxSections = Math.max(MAX_SECTIONS, Math.min(named.length, MAX_NAMED));
+    const maxChars = named.length > 1 ? MAX_CHARS * 1.5 : MAX_CHARS;
+
     const picked = [];
     let chars = 0;
-    for (const { d, score } of ranked.slice(0, MAX_SECTIONS)) {
-        if (score < ranked[0].score * MIN_RELATIVE_SCORE) break;
-        if (chars + d.text.length > MAX_CHARS && picked.length) break;
-        picked.push(`[${d.title}] ${d.text}`);
-        chars += d.text.length;
+    for (const r of order) {
+        if (picked.length >= maxSections) break;
+        if (!named.includes(r) && r.score < ranked[0].score * MIN_RELATIVE_SCORE) continue;
+        if (chars + r.d.text.length > maxChars && picked.length) continue;
+        picked.push(`[${r.d.title}] ${r.d.text}`);
+        chars += r.d.text.length;
     }
     return picked.join('\n');
 }

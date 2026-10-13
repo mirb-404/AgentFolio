@@ -5,13 +5,13 @@
 //   npm run questions -- 200     # last 200
 //   npm run questions -- --json  # raw JSON, e.g. to pipe into a file
 //
-// Needs KV_REST_API_URL and KV_REST_API_TOKEN in .env — `vercel env pull .env`
+// Needs KV_REST_API_URL and KV_REST_API_TOKEN in .env or .env.local — `npx vercel env pull .env.local`
 // fetches them, or copy them from Vercel → Storage → your Upstash database.
 
 const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
 const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
 if (!url || !token) {
-    console.error('Missing KV_REST_API_URL / KV_REST_API_TOKEN in .env (run `vercel env pull .env`).');
+    console.error('Missing KV_REST_API_URL / KV_REST_API_TOKEN in .env.local (run `npx vercel env pull .env.local`).');
     process.exit(1);
 }
 
