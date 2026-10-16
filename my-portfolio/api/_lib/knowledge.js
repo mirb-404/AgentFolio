@@ -16,7 +16,9 @@ const MIN_RELATIVE_SCORE = 0.4;  // drop sections far weaker than the best match
 // gaps as well as the matches, so these sections always come along
 const FIT_SECTIONS = 4;          // best matches against the posting's requirements
 const FIT_CHARS = 4000;          // ≈ 1000 tokens for those, plus the pinned ones below
-const FIT_PINNED = ['Education and degree', 'Things he does not claim', 'Weaknesses, gaps and working style'];
+// Language, location and hours are common knock-out requirements; both sections are short
+const FIT_PINNED = ['Education and degree', 'Spoken languages', 'Availability, job search and contact',
+    'Things he does not claim', 'Weaknesses, gaps and working style'];
 
 const STOPWORDS = new Set(('a an and are as at be but by can could did do does for from had has have he her his how i ' +
     'if in into is it its me my of on or our she so tell that the their them there these they this to was we were ' +

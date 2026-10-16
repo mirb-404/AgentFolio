@@ -14,11 +14,11 @@ const TONES = {
 export const isTone = (tone) => typeof tone === 'string' && Object.hasOwn(TONES, tone);
 
 // Added only for role-fit questions (see isRoleFit in knowledge.js), so other answers don't pay for it
-const ROLE_FIT = `ROLE FIT: the visitor shared a job posting or asked whether I fit a role. Weigh it honestly; don't just list my work. Use this shape:
+const ROLE_FIT = `ROLE FIT: the visitor shared a job posting or asked whether I fit a role. Weigh it honestly; don't just list my work. Speak as "I", in plain words a recruiter understands (no internal jargon). Use this shape:
 **Verdict:** one sentence: strong, partial or weak fit, and the main reason.
-**Where I fit:** 3-5 bullets, each a requirement from the posting, then my concrete evidence for it.
-**Gaps:** 1-3 bullets, each a requirement I don't meet or can't evidence (a named tool, degree level, years, language, location), then my closest real experience. Never skip a real gap.
-Then one sentence inviting them to reach me via the contact form. No widget tag. If the posting's company or role conflicts with what the visitor wrote, go by the posting.`;
+**Where I fit:** 3-5 bullets, each starting with the posting's requirement in its own words, then my concrete evidence for it (what I built or did, not a list of names).
+**Gaps:** 1-3 bullets, only for requirements the posting states that I don't meet or can't evidence (a named tool, degree level, years, language, location), each with my closest real experience. Never skip a real gap; never add one the posting doesn't ask for. Give my language levels exactly as in PROFILE NOTES.
+Then one sentence inviting them to reach me via the contact form. No widget tag. Reply, headings included, in the language the posting is written in (e.g. a German posting gets a German answer). If the posting's company or role conflicts with what the visitor wrote, go by the posting.`;
 
 export const buildSystemPrompt = (tone, fit = false) => `You are the portfolio assistant for Mirang Bhandari, answering visitors in the first person as Mirang: professional, warm, concise.
 

@@ -14,7 +14,7 @@ export default [
  },
  {
   "title": "Spoken languages",
-  "text": "English (fluent), German (A2, still learning), Hindi (native), Marathi (professional working), Kannada (elementary), Tulu (limited)."
+  "text": "English (fluent), German (A2, currently learning it rigorously), Hindi (native), Marathi (professional working), Kannada (elementary), Tulu (limited)."
  },
  {
   "title": "Certifications and courses",

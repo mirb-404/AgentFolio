@@ -9,8 +9,8 @@
  */
 export function isRoleFit(question) {
     const q = question.toLowerCase();
-    const postingWords = q.match(/\b(requirements?|responsibilit|qualifications?|about the (job|role)|we are looking|you will|your tasks|tasks|we offer|must have|nice to have|hiring|apply|candidate)/g) ?? [];
+    const postingWords = q.match(/\b(requirements?|responsibilit|qualifications?|about the (job|role)|we are looking|you will|your tasks|tasks|we offer|must have|nice to have|hiring|apply|candidate|anforderungen|aufgaben|wir bieten|dein profil|ihr profil|qualifikation|bewerb|stellenangebot)/g) ?? [];
     if (q.length >= 300 && new Set(postingWords).size >= 2) return true;
-    return /\b(fit|suit(ed|able)?|match|qualified|right candidate|hire (you|mirang))\b/.test(q)
-        && /\b(role|job|position|intern(ship)?|werkstudent|working student|team|opening|vacancy)\b/.test(q);
+    return /\b(fit|suit(ed|able)?|match|qualified|right candidate|hire (you|mirang)|passt|passen|geeignet)\b/.test(q)
+        && /\b(role|job|position|intern(ship)?|werkstudent|working student|team|opening|vacancy|stelle|rolle|praktikum)\b/.test(q);
 }

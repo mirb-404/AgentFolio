@@ -23,7 +23,7 @@ Open to Werkstudent / working-student roles in agentic AI or data science (20 h/
 MSc Applied Data Science and AI, SRH University of Applied Sciences Heidelberg, Oct 2025, present (expected Oct 2027); includes an industry research project (the Deutsche Bank work). BTech Computer Science, Sikkim Manipal Institute of Technology, India, 2020-2024, academic scholarship holder.
 
 ## Spoken languages
-English (fluent), German (A2, still learning), Hindi (native), Marathi (professional working), Kannada (elementary), Tulu (limited).
+English (fluent), German (A2, currently learning it rigorously), Hindi (native), Marathi (professional working), Kannada (elementary), Tulu (limited).
 
 ## Certifications and courses
 Deep Agents with LangChain and LangGraph, LangChain Academy, 2026. AWS Academy Graduate, Cloud Foundations, 2025. NVIDIA, Disaster Risk Monitoring Using Satellite Imagery, 2024. Online courses: Microsoft PowerShell, Introduction to Computer Science, Programming with Python, Jenkins Pipeline as Code.
