@@ -12,6 +12,12 @@ const MAX_CHARS = 3600;          // ≈ 900 tokens of context, worst case
 const MAX_NAMED = 4;             // sections a visitor names explicitly ("compare A, B and C")
 const MIN_RELATIVE_SCORE = 0.4;  // drop sections far weaker than the best match
 
+// Role-fit questions ("would I fit this role?", a pasted job posting) need the
+// gaps as well as the matches, so these sections always come along
+const FIT_SECTIONS = 4;          // best matches against the posting's requirements
+const FIT_CHARS = 4000;          // ≈ 1000 tokens for those, plus the pinned ones below
+const FIT_PINNED = ['Education and degree', 'Things he does not claim', 'Weaknesses, gaps and working style'];
+
 const STOPWORDS = new Set(('a an and are as at be but by can could did do does for from had has have he her his how i ' +
     'if in into is it its me my of on or our she so tell that the their them there these they this to was we were ' +
     'what when where which who why will with would you your about any some more also just than then mirang ' +
@@ -87,7 +93,7 @@ function bm25(doc, query) {
  * when nothing is relevant (greetings, small talk). `context` (the previous
  * question) helps follow-ups like "tell me more about that" — at lower weight.
  */
-export function retrieve(question, context = '') {
+export function retrieve(question, context = '', fit = false) {
     if (!docs.length) return '';
     const query = new Map();
     const add = (text, weight) => {
@@ -109,8 +115,8 @@ export function retrieve(question, context = '') {
     const asked = new Set(terms(question));
     const named = ranked.filter(({ d }) => terms(d.title).some(t => asked.has(t) && (titleDf.get(t) ?? 0) <= 2));
     const order = [...named, ...ranked.filter(r => !named.includes(r))];
-    const maxSections = Math.max(MAX_SECTIONS, Math.min(named.length, MAX_NAMED));
-    const maxChars = named.length > 1 ? MAX_CHARS * 1.5 : MAX_CHARS;
+    const maxSections = fit ? FIT_SECTIONS : Math.max(MAX_SECTIONS, Math.min(named.length, MAX_NAMED));
+    const maxChars = fit ? FIT_CHARS : named.length > 1 ? MAX_CHARS * 1.5 : MAX_CHARS;
 
     const picked = [];
     let chars = 0;
@@ -118,8 +124,9 @@ export function retrieve(question, context = '') {
         if (picked.length >= maxSections) break;
         if (!named.includes(r) && r.score < ranked[0].score * MIN_RELATIVE_SCORE) continue;
         if (chars + r.d.text.length > maxChars && picked.length) continue;
-        picked.push(`[${r.d.title}] ${r.d.text}`);
+        picked.push(r.d);
         chars += r.d.text.length;
     }
-    return picked.join('\n');
+    if (fit) for (const d of docs) if (FIT_PINNED.includes(d.title) && !picked.includes(d)) picked.push(d);
+    return picked.map(d => `[${d.title}] ${d.text}`).join('\n');
 }

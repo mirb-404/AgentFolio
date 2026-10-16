@@ -1,5 +1,6 @@
 import { portfolioData } from '../data/portfolioData';
 import { smallTalkReply, isSmallTalkReply } from './smallTalk';
+import { isRoleFit } from '../../api/_lib/roleFit.js';
 
 /**
  * Canned answers: common questions are matched by keyword and answered from
@@ -18,6 +19,9 @@ export const getPredefinedResponse = (input: string): string | null => {
     // Before the keyword rules, so "nice work!" is a compliment, not a request for work history
     const chat = smallTalkReply(input);
     if (chat) return chat;
+
+    // A job posting or "would I fit this role?" needs the model's pros and cons, not a widget
+    if (isRoleFit(input)) return null;
 
     if (
         normalizedInput.includes("tell me about yourself") ||

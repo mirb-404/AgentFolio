@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react';
 
 /** Longest message the server accepts (api/chat.js MAX_LEN.user) */
-export const MAX_QUESTION_LENGTH = 1500;
+export const MAX_QUESTION_LENGTH = 4000;
 
 /** A visitor's model-token allowance, as reported by /api/chat */
 export type Quota = {

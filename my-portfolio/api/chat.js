@@ -32,6 +32,7 @@
  */
 import { createHash } from 'node:crypto';
 import { retrieve } from './_lib/knowledge.js';
+import { isRoleFit } from './_lib/roleFit.js';
 import { redis } from './_lib/redis.js';
 import { buildSystemPrompt, isTone, TOOLS } from './_lib/prompt.js';
 
@@ -60,7 +61,7 @@ const REQS_PER_MIN = num(process.env.CHAT_IP_REQUESTS_PER_MIN, 8);
 
 const MAX_MESSAGES = 14;
 const MAX_CHARS = 24_000;                                            // whole conversation
-const MAX_LEN = { user: 1_500, assistant: 4_000, tool: 6_000 };      // per message
+const MAX_LEN = { user: 4_000, assistant: 4_000, tool: 6_000 };      // per message
 const TOOL_NAME = TOOLS[0].function.name;
 
 // Question log: newest first, capped so it can't grow without bound
@@ -171,9 +172,9 @@ const lastQuestion = (messages) => userQuestions(messages).at(-1) ?? '';
  * system message (see knowledge/ and api/_lib/knowledge.js). Done here rather
  * than in the browser so the knowledge base never ships in the page bundle.
  */
-function withProfileNotes(messages) {
+function withProfileNotes(messages, fit) {
     const asked = userQuestions(messages);
-    const notes = retrieve(asked.at(-1) ?? '', asked.at(-2) ?? '');
+    const notes = retrieve(asked.at(-1) ?? '', asked.at(-2) ?? '', fit);
     if (!notes) return messages;
     const note = {
         role: 'system',
@@ -292,7 +293,9 @@ export async function POST(request) {
     }
     if (quota.exhausted) return json({ error: 'quota_exhausted', quota }, 429);
 
-    const prompt = withProfileNotes([{ role: 'system', content: buildSystemPrompt(tone) }, ...messages]);
+    // Job postings and "would I fit this role?" get a pros/cons answer and the gap sections
+    const fit = isRoleFit(lastQuestion(messages));
+    const prompt = withProfileNotes([{ role: 'system', content: buildSystemPrompt(tone, fit) }, ...messages], fit);
 
     // Reserve the prompt cost now so concurrent requests see it; settled to
     // Groq's exact count once the stream ends
